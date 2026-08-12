@@ -38,7 +38,8 @@ ln -s "$PWD/scroute" ~/.local/bin/scroute
 scroute                          # 默认船+本金，全局 Top 15
 scroute from "Patch City"        # 去程：从某站出发买什么
 scroute to "Patch City"          # 返程：买什么拉回某站卖
-scroute loop "Patch City"        # 环形：去程+返程一次出
+scroute loop "Patch City"        # 环形：去程+返程一次出（仅 UEX）
+scroute dual "Patch City"        # 双源核验：UEX + SC Trade Tools 去程/返程四段对照
 scroute fresh ...                # 忽略缓存强制刷新（出发前复核库存）
 scroute raw <参数>               # 透传全部高级参数
 ```
@@ -66,7 +67,9 @@ scroute raw --scu 640 --capital 3500000 --full --origin-system Pyro --space-only
 
 - 买入：`status_buy ≥ 5` 且 `scu_buy ≥ 舱容` 且 `买价 ≤ 预算 ÷ 舱容`
 - 卖出：`status_sell ≤ 2` 且 `需剩（scu_sell − scu_sell_stock）≥ 舱容`
-- 全局：ROI ≥ 30%（可调）；本金默认最多押一半
+- 全局：`plan_route.py` 默认 ROI ≥ 30%；`scroute` 包装器默认 25%（均可用 `--min-roi` 调整）；本金默认最多押一半
+
+`dual` 子命令的 SC Trade Tools 对照由 `sctt_routes.py` 提供，需 `pip install pycryptodome`。该站点改版可能导致对照失效，届时需重新抓取前端内嵌的 AES 字段（见 `sctt_routes.py` 开头注释）。
 
 ## 数据说明
 

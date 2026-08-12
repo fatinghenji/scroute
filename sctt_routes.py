@@ -5,7 +5,7 @@
   1. GET /api/system/epoch 多次采样取最小 RTT 校时
   2. token = base64(iv) + base64(AES-CBC(  "<op>@<server_ms>" ))，op=getTradeRoutes
   3. POST /api/tools/trades  body 同前端 trade-routes 页（2026-08-12 抓取）
-AES key 内嵌于前端 main.js（站点改版会变，失效时重新抓 clientVersion/aes 字段）。
+AES key 内嵌于前端 main.js（站点改版会变，失效时重新抓前端 main.js 的 clientVersion/aes 字段）。
 
 用法:
   sctt_routes.py [--ship Railen] [--investment 7000000] [--top 10] [--origin "Patch City"]
@@ -17,7 +17,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 
 BASE = "https://sc-trade.tools"
-AES_B64 = "YAQqYsrYmYIc9WxvCZF4W5yp6FaIb7h6"  # 前端内嵌（见 sctt_analytics_collect.py）
+AES_B64 = "YAQqYsrYmYIc9WxvCZF4W5yp6FaIb7h6"  # 前端 main.js 内嵌
 OP = "getTradeRoutes"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 

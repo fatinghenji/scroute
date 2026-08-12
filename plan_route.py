@@ -28,9 +28,9 @@ RETRIES = 2
 MAX_WORKERS = 8  # 并行度（2026-08-09 实测：0.15s 间隔≈400/分 连发 10 次全 200，120/分不强制）
 MIN_GAP = 0.15  # 请求最小间隔（原 0.5s 自缚手脚）
 
-# —— 时薪模型常量（2026-08-12 标定，来源见 SKILL.md「时薪模型」节）——
-# QD 巡航速度（m/s）：Erkul quantumdrives 家族实测 driveSpeed。按船原装 QD 建表，
-# 新船用 erkul.py fetch --ships X --families quantumdrives 标定后补录。
+# —— 时薪模型常量（2026-08-12 标定）——
+# QD 巡航速度（m/s）：取 Erkul（erkul.games）quantumdrives 家族实测 driveSpeed，按船原装 QD 建表。
+# 新船标定：在 erkul.games 查该船原装 QD 的 driveSpeed 实测值，填入下表后重跑即可。
 SHIP_QD_SPEED = {
     "railen": 262e6,      # 原装 Bolon（工C），LIVE 4.9.0 实测；续航 318.75 Gm
     "hull b": 262e6,      # 同 S2 槽位假设同级 QD（未单独标定，使用时注明）
@@ -40,7 +40,7 @@ SPOOL_S = 8        # 每次量子跳跃：点火 6s + 校准 ~2s（Bolon 实测 
 DOCK_MIN = 4       # 空间站对接+起飞 min/次
 LAND_MIN = 5       # 地面站降落+起飞 min/次
 AUTO_MIN_PER_100SCU = 1.0   # 自动装/卸耗时 ~1 min/100 SCU（640 SCU ≈ 6.4 min）
-MANUAL_BOX_S = 35  # 手动搬箱 s/箱（25-45 敏感度见 SKILL.md）
+MANUAL_BOX_S = 35  # 手动搬箱 s/箱（保守取值；25-45 区间内时薪结论排序基本不变）
 
 
 def leg_minutes(dist_gm, scu, buy_term, sell_term, qd_speed):
