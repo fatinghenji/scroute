@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# scroute — 星际公民货运路线速查（零 LLM token，直接跑 UEX 数据）
+#
+# 用法:
+#   scroute                          # Railen+700W 全局 Top 路线
+#   scroute from "Patch City"        # 去程：从某站出发买什么
+#   scroute to "Patch City"          # 返程：买什么回某站卖
+#   scroute loop "Patch City"        # 环形：去程+返程一次出（仅 UEX）
+#   scroute dual "Patch City"        # 双源核验：UEX + SC Trade Tools 四段对照（2026-08-12）
+#   scroute fresh ...                # 任意子命令前加 fresh = 强制刷新库存
+#   scroute --ship "Hull B" --capital 5000000 from Baijini   # 覆盖默认船/本金
+#   scroute raw <原样参数...>         # 透传给 plan_route.py
+#
+# 数据: UEX API 2.0 众包价，服务端缓存 ~30 分钟。脚本缓存在 /tmp/uex_cache（25 分钟）。
+
+SCRIPT="$(dirname "$(readlink -f "$0")")/plan_route.py"
+SCTT="$(dirname "$(readlink -f "$0")")/sctt_routes.py"
+SHIP="Railen"
+CAPITAL=7000000
+MIN_ROI=25
+TOP=15
+FRESH=0
+MODE=""
+PLACE=""
+EXTRA=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    from)   MODE="--origin"; PLACE="$2"; shift 2 ;;
+    to)     MODE="--dest";   PLACE="$2"; shift 2 ;;
+    loop)   MODE="loop";     PLACE="$2"; shift 2 ;;
+    dual)   MODE="dual";     PLACE="$2"; shift 2 ;;
+    fresh)  FRESH=1; shift ;;
+    --ship) SHIP="$2"; shift 2 ;;
+    --capital) CAPITAL="$2"; shift 2 ;;
+    --min-roi) MIN_ROI="$2"; shift 2 ;;
+    --top) TOP="$2"; shift 2 ;;
+    raw) shift; exec python3 "$SCRIPT" "$@" ;;
+    *) EXTRA+=("$1"); shift ;;
+  esac
+done
+
+run() {
+  local -a args=(--ship "$SHIP" --capital "$CAPITAL" --min-roi "$MIN_ROI" --top "$TOP")
+  (( FRESH )) && args+=(--refresh)
+  python3 "$SCRIPT" "${args[@]}" "$@" "${EXTRA[@]}"
+}
+
+if [[ "$MODE" == "dual" ]]; then
+  echo "════════ 去程 UEX：从 $PLACE 出发 ════════"
+  run --origin "$PLACE"
+  echo
+  echo "════════ 去程 SCTT（双源比对） ════════"
+  python3 "$SCTT" --ship "$SHIP" --investment "$CAPITAL" --origin "$PLACE" --top "$TOP"
+  echo
+  echo "════════ 返程 UEX：回 $PLACE 卖 ════════"
+  run --dest "$PLACE"
+  echo
+  echo "════════ 返程 SCTT（双源比对） ════════"
+  python3 "$SCTT" --ship "$SHIP" --investment "$CAPITAL" --dest "$PLACE" --top "$TOP"
+elif [[ "$MODE" == "loop" ]]; then
+  echo "════════ 去程：从 $PLACE 出发 ════════"
+  run --origin "$PLACE"
+  echo
+  echo "════════ 返程：回 $PLACE 卖 ════════"
+  run --dest "$PLACE"
+elif [[ -n "$MODE" ]]; then
+  run "$MODE" "$PLACE"
+else
+  run
+fi

@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 2406" width="4800" height="9624">
+<defs>
+  <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#0c1929"/>
+    <stop offset="100%" style="stop-color:#0f2744"/>
+  </linearGradient>
+  <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" style="stop-color:#00bcd4"/>
+    <stop offset="100%" style="stop-color:#26c6da"/>
+  </linearGradient>
+  <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#0d47a1"/>
+    <stop offset="100%" style="stop-color:#1565c0"/>
+  </linearGradient>
+  <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+    <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+  </filter>
+  <filter id="softShadow" x="-5%" y="-5%" width="110%" height="110%">
+    <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.1"/>
+  </filter>
+</defs>
+
+  <!-- Background -->
+  <rect width="1200" height="2406" fill="url(#bgGrad)"/>
+
+
+  <!-- Header -->
+  <rect x="40" y="40" width="1120" height="180" rx="20" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <circle cx="1050" cy="130" r="80" fill="#00bcd4" opacity="0.15"/>
+  <circle cx="1100" cy="80" r="50" fill="#00bcd4" opacity="0.1"/>
+
+  <text x="80" y="100" font-family="Noto Sans CJK SC" font-size="42" font-weight="700" fill="#ffffff">scroute · 星际公民货运路线速查</text>
+  <text x="80" y="145" font-family="Noto Sans CJK SC" font-size="22" fill="#ffffff" opacity="0.8">零 LLM token · UEX API 2.0 实时众包数据 · 时薪决策模型（2026-08-12 版）</text>
+  <text x="80" y="185" font-family="Noto Sans CJK SC" font-size="16" fill="#ffffff" opacity="0.5">~/.local/bin/scroute → plan_route.py（sc-cargo-trading 技能）</text>
+
+  <rect x="40" y="240" width="1120" height="358" rx="16" fill="#132f4c" filter="url(#softShadow)"/>
+  <rect x="40" y="240" width="6" height="358" rx="3" fill="url(#accentGrad)"/>
+  <text x="70" y="280" font-family="Noto Sans CJK SC" font-size="26" font-weight="600" fill="#00bcd4">① 常用命令</text>
+    <rect x="70" y="310" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="345" r="18" fill="#00bcd4"/>
+    <text x="100" y="352" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🚀</text>
+    <text x="130" y="344" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">scroute</text>
+    <text x="85" y="380" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">默认 Railen 640 SCU + 700W 本金，全局 </text>
+    <text x="85" y="402" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">Top 15 路线</text>
+    <rect x="425" y="310" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="345" r="18" fill="#00bcd4"/>
+    <text x="455" y="352" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">📦</text>
+    <text x="485" y="344" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">scroute from &quot;站名&quot;</text>
+    <text x="440" y="380" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">去程：从某站出发买什么、卖到哪最赚（如 fr</text>
+    <text x="440" y="402" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">om &quot;Patch City&quot;）</text>
+    <rect x="780" y="310" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="810" cy="345" r="18" fill="#00bcd4"/>
+    <text x="810" y="352" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🔄</text>
+    <text x="840" y="344" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">scroute to &quot;站名&quot;</text>
+    <text x="795" y="380" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">返程：买什么拉回某站卖，告别空驶（如 to </text>
+    <text x="795" y="402" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">&quot;Patch City&quot;）</text>
+    <rect x="70" y="444" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="479" r="18" fill="#00bcd4"/>
+    <text x="100" y="486" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">➰</text>
+    <text x="130" y="478" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">scroute loop / dual &quot;站名&quot;</text>
+    <text x="85" y="514" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">loop = 去程+返程一次出；dual = UEX + SC</text>
+    <text x="85" y="536" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9"> Trade Tools 双源四段对照</text>
+    <rect x="425" y="444" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="479" r="18" fill="#00bcd4"/>
+    <text x="455" y="486" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">♻️</text>
+    <text x="485" y="478" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">scroute fresh ...</text>
+    <text x="440" y="514" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">任意子命令前加 fresh = 忽略缓存强制刷新</text>
+    <text x="440" y="536" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">库存（出发前必做）</text>
+    <rect x="780" y="444" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="810" cy="479" r="18" fill="#00bcd4"/>
+    <text x="810" y="486" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🔧</text>
+    <text x="840" y="478" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">scroute raw &lt;参数&gt;</text>
+    <text x="795" y="514" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">原样透传给 plan_route.py，解锁全部高级</text>
+    <text x="795" y="536" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">参数</text>
+  <rect x="40" y="618" width="1120" height="382" rx="16" fill="#132f4c" filter="url(#softShadow)"/>
+  <rect x="40" y="618" width="6" height="382" rx="3" fill="url(#accentGrad)"/>
+  <text x="70" y="658" font-family="Noto Sans CJK SC" font-size="26" font-weight="600" fill="#00bcd4">② 核心参数</text>
+    <rect x="70" y="688" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="723" r="18" fill="#00bcd4"/>
+    <text x="100" y="730" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🛸</text>
+    <text x="130" y="722" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">--ship &quot;Hull B&quot; / --scu 64</text>
+    <text x="130" y="744" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">0</text>
+    <text x="85" y="780" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">船名模糊匹配 UEX vehicles 自动取舱容；</text>
+    <text x="85" y="802" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">或直接给 SCU 数</text>
+    <rect x="425" y="688" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="723" r="18" fill="#00bcd4"/>
+    <text x="455" y="730" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">💰</text>
+    <text x="485" y="722" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">--capital 7000000 [--full]</text>
+    <text x="440" y="758" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">本金（aUEC）。默认半仓红线只用一半；--fu</text>
+    <text x="440" y="780" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">ll 才押满（满仓示例：350W 全押）</text>
+    <rect x="780" y="688" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="810" cy="723" r="18" fill="#00bcd4"/>
+    <text x="810" y="730" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">📈</text>
+    <text x="840" y="722" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">--min-roi 30 / --top 15</text>
+    <text x="795" y="758" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">最低 ROI% 与输出条数。对齐 UEX-Trader </text>
+    <text x="795" y="780" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">无门槛行为用 --min-roi 0</text>
+    <rect x="70" y="846" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="881" r="18" fill="#00bcd4"/>
+    <text x="100" y="888" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">⏱️</text>
+    <text x="130" y="880" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">--qd-speed 262</text>
+    <text x="85" y="916" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">量子巡航速度 Mm/s（Erkul 实测标定）；未</text>
+    <text x="85" y="938" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">标定的船用兜底 250</text>
+  <rect x="40" y="1020" width="1120" height="362" rx="16" fill="#132f4c" filter="url(#softShadow)"/>
+  <text x="70" y="1060" font-family="Noto Sans CJK SC" font-size="24" font-weight="600" fill="#e3f2fd">③ 2026-08-12 新增能力</text>
+    <rect x="70" y="1085" width="1060" height="84" rx="10" fill="#0c1929"/>
+    <circle cx="100" cy="1120" r="20" fill="#00bcd4" opacity="0.15"/>
+    <text x="100" y="1127" font-family="Noto Sans CJK SC" font-size="18" fill="#00bcd4" text-anchor="middle" font-weight="600">🌌</text>
+    <text x="135" y="1115" font-family="Noto Sans CJK SC" font-size="17" font-weight="600" fill="#e3f2fd">--origin-system Pyro / --dest-system Stanton</text>
+    <text x="135" y="1147" font-family="Noto Sans CJK SC" font-size="14" fill="#90caf9">按星系过滤出发地/目的地（模糊匹配），对齐 UEX-Trader 的星系下拉</text>
+    <rect x="70" y="1179" width="1060" height="84" rx="10" fill="#0c1929"/>
+    <circle cx="100" cy="1214" r="20" fill="#00bcd4" opacity="0.15"/>
+    <text x="100" y="1221" font-family="Noto Sans CJK SC" font-size="18" fill="#00bcd4" text-anchor="middle" font-weight="600">🛰️</text>
+    <text x="135" y="1209" font-family="Noto Sans CJK SC" font-size="17" font-weight="600" fill="#e3f2fd">--space-only</text>
+    <text x="135" y="1241" font-family="Noto Sans CJK SC" font-size="14" fill="#90caf9">仅限空间站终端（出发+到达），排除地面手动搬箱哨站</text>
+    <rect x="70" y="1273" width="1060" height="84" rx="10" fill="#0c1929"/>
+    <circle cx="100" cy="1308" r="20" fill="#00bcd4" opacity="0.15"/>
+    <text x="100" y="1315" font-family="Noto Sans CJK SC" font-size="18" fill="#00bcd4" text-anchor="middle" font-weight="600">📊</text>
+    <text x="135" y="1303" font-family="Noto Sans CJK SC" font-size="17" font-weight="600" fill="#e3f2fd">「需剩」列 + 剩余需求硬过滤</text>
+    <text x="135" y="1335" font-family="Noto Sans CJK SC" font-size="14" fill="#90caf9">需剩 = scu_sell 预测需求 − scu_sell_stock 站点库存（官方口径）；剩余 &lt; 一船舱容的路线直接砍掉，防飞到卖不动</text>
+  <rect x="40" y="1402" width="1120" height="382" rx="16" fill="#132f4c" filter="url(#softShadow)"/>
+  <rect x="40" y="1402" width="6" height="382" rx="3" fill="url(#accentGrad)"/>
+  <text x="70" y="1442" font-family="Noto Sans CJK SC" font-size="26" font-weight="600" fill="#00bcd4">④ 内置过滤规则（定案，勿放宽）</text>
+    <rect x="70" y="1472" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="1507" r="18" fill="#00bcd4"/>
+    <text x="100" y="1514" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🛒</text>
+    <text x="130" y="1506" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">买入门槛</text>
+    <text x="85" y="1542" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">status_buy≥5 且 scu_buy≥舱容 且 买价≤</text>
+    <text x="85" y="1564" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">预算÷舱容——装满一船且全额买得起</text>
+    <rect x="425" y="1472" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="1507" r="18" fill="#00bcd4"/>
+    <text x="455" y="1514" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">💵</text>
+    <text x="485" y="1506" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">卖出门槛</text>
+    <text x="440" y="1542" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">status_sell≤2 且 需剩≥舱容——仓库缺货、</text>
+    <text x="440" y="1564" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">需求装得下一船才飞</text>
+    <rect x="780" y="1472" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="810" cy="1507" r="18" fill="#00bcd4"/>
+    <text x="810" y="1514" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🛑</text>
+    <text x="840" y="1506" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">全局红线</text>
+    <text x="795" y="1542" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">ROI≥30%；本金一次最多押一半（--full 才</text>
+    <text x="795" y="1564" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">押满），防海盗/坠机/回滚连本清空</text>
+    <rect x="70" y="1606" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="1641" r="18" fill="#00bcd4"/>
+    <text x="100" y="1648" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">⚖️</text>
+    <text x="130" y="1640" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">严格度定案</text>
+    <text x="85" y="1676" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">2026-08-12 与 UEX-Trader 对账后拍板：状</text>
+    <text x="85" y="1698" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">态码保持硬门槛（代价：档 3 但装得满的路线</text>
+    <text x="85" y="1720" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">会被砍，属可接受保守）</text>
+    <rect x="425" y="1606" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="1641" r="18" fill="#00bcd4"/>
+    <text x="455" y="1648" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">⚠️</text>
+    <text x="485" y="1640" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">避坑</text>
+    <text x="440" y="1676" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">UEX-Trader 的「库存 − 近15天成交均量」</text>
+    <text x="440" y="1698" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">需求公式系误读官方字段，勿参考</text>
+  <rect x="40" y="1804" width="1120" height="382" rx="16" fill="#132f4c" filter="url(#softShadow)"/>
+  <rect x="40" y="1804" width="6" height="382" rx="3" fill="url(#accentGrad)"/>
+  <text x="70" y="1844" font-family="Noto Sans CJK SC" font-size="26" font-weight="600" fill="#00bcd4">⑤ 输出列速读</text>
+    <rect x="70" y="1874" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="1909" r="18" fill="#00bcd4"/>
+    <text x="100" y="1916" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🏷️</text>
+    <text x="130" y="1908" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">买入站 @价(库存)</text>
+    <text x="85" y="1944" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">库存数字 ≥ 舱容才装得满，随行显示</text>
+    <rect x="425" y="1874" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="1909" r="18" fill="#00bcd4"/>
+    <text x="455" y="1916" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">🏁</text>
+    <text x="485" y="1908" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">卖出站 @价(需剩)</text>
+    <text x="440" y="1944" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">需剩越大越安全（如 Patch City 需剩 12,9</text>
+    <text x="440" y="1966" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">60 = 二十船都卖得动）</text>
+    <rect x="780" y="1874" width="340" height="124" rx="12" fill="#0d47a1"/>
+    <circle cx="810" cy="1909" r="18" fill="#00bcd4"/>
+    <text x="810" y="1916" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">📦</text>
+    <text x="840" y="1908" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">装/卸</text>
+    <text x="795" y="1944" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">自动 = 空间站秒装；手动(≤24SCU箱) = 地</text>
+    <text x="795" y="1966" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">面搬箱，640 SCU ≈ 27 箱慎重</text>
+    <rect x="70" y="2008" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="100" cy="2043" r="18" fill="#00bcd4"/>
+    <text x="100" y="2050" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">⏳</text>
+    <text x="130" y="2042" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">时薪</text>
+    <text x="85" y="2078" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">含单腿装卸 + 空驶返程 QT 的保守口径；找</text>
+    <text x="85" y="2100" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">到返程货实际更高。总利润高 ≠ 时薪高，短程</text>
+    <text x="85" y="2122" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">高 ROI 常反超</text>
+    <rect x="425" y="2008" width="340" height="148" rx="12" fill="#0d47a1"/>
+    <circle cx="455" cy="2043" r="18" fill="#00bcd4"/>
+    <text x="455" y="2050" font-family="Noto Sans CJK SC" font-size="16" fill="#132f4c" text-anchor="middle" font-weight="600">✅</text>
+    <text x="485" y="2042" font-family="Noto Sans CJK SC" font-size="18" font-weight="600" fill="#e3f2fd">验证 / ⚠️ 标记</text>
+    <text x="440" y="2078" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">✓ = 官方 routes 交叉核验一致；⚠️ = 违</text>
+    <text x="440" y="2100" font-family="Noto Sans CJK SC" font-size="15" fill="#90caf9">禁品或跨星系路线</text>
+  <rect x="40" y="2206" width="1120" height="120" rx="16" fill="#132f4c" filter="url(#softShadow)"/>
+    <text x="600" y="2256" font-family="Noto Sans CJK SC" font-size="20" fill="#90caf9" text-anchor="middle">scroute raw --scu 640 --capital 3500000 --full --min-roi 0 --origin-system Pyro --space-only →</text>
+    <text x="600" y="2286" font-family="Noto Sans CJK SC" font-size="20" fill="#90caf9" text-anchor="middle"> 优选：Silicon Megumi@1,777 → Patch City@2,900（ROI 63% · 125W/h · 需剩 12,960）</text>
+
+  <text x="600" y="2366" font-family="Noto Sans CJK SC" font-size="14" fill="#90caf9" text-anchor="middle">数据: UEX API 2.0 · 服务端缓存 ~30 分钟 / 本地 25 分钟 · 跑完货顺手用 UEX-Trader 申报价格回馈社区</text>
+</svg>
