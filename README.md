@@ -1,79 +1,113 @@
 # scroute · 星际公民货运路线速查
 
-零配置的 UEX 实时货运路线规划器：一条命令告诉你买什么、在哪买、卖到哪、赚多少、时薪多少。
+一条命令告诉你：现在买什么货、去哪买、拉到哪卖、一趟赚多少、折合时薪多少。
+数据来自 UEX 玩家实时众包价格，不用开浏览器，不用翻表格。
 
 ![使用方案卡片](docs/scroute-usage-card.png)
 
-## 特性
+## 三分钟上手
 
-- **实时数据**：UEX API 2.0 玩家众包价格（本地缓存 25 分钟，服务端缓存约 30 分钟）
-- **满仓校验**：只推荐「装得满一船、全额买得起、目的地卖得掉」的路线
-- **剩余需求过滤**：按官方口径 `预测需求 − 站点库存` 计算「需剩」，装不下一船的路线直接砍掉
-- **时薪模型**：含量子巡航（可按船标定 QD 速度）、点火、对接/降落、自动装卸/手动搬箱、空驶返程的保守时薪
-- **实用标记**：自动/手动装卸与箱型、违禁品 ⚠️、跨星系 ⚠️、官方 routes 交叉验证 ✓
-- **星系过滤 / 仅空间站**：`--origin-system Pyro --space-only`
-
-## 依赖
-
-- Python ≥ 3.10（仅标准库）
-- `curl`（Linux/macOS 自带；Windows 10+ 自带 `curl.exe`）
-- 可选：`sctt_routes.py`（SC Trade Tools 双源对照）需 `pip install pycryptodome`
-
-## 安装
+**第 1 步：装**
 
 ```bash
 git clone https://github.com/fatinghenji/scroute.git
 cd scroute
-# Linux/macOS：软链到 PATH
-ln -s "$PWD/scroute" ~/.local/bin/scroute
-# Windows：直接用 python 跑核心脚本
-#   python plan_route.py --scu 640 --capital 7000000
+ln -s "$PWD/scroute" ~/.local/bin/scroute   # 之后任意目录都能直接敲 scroute
 ```
 
-编辑 `scroute` 开头的 `SHIP` / `CAPITAL` / `MIN_ROI` 三行改成自己的船和本金。
+需要 Python 3.10+ 和 curl，Linux / macOS 都自带。Windows 直接用 `python plan_route.py` 跑，参数见下文「高级参数」。
 
-## 用法
+**第 2 步：改成你的船和本金**
+
+打开 `scroute` 文件，改开头三行：
 
 ```bash
-scroute                          # 默认船+本金，全局 Top 15
-scroute from "Patch City"        # 去程：从某站出发买什么
-scroute to "Patch City"          # 返程：买什么拉回某站卖
-scroute loop "Patch City"        # 环形：去程+返程一次出（仅 UEX）
-scroute dual "Patch City"        # 双源核验：UEX + SC Trade Tools 去程/返程四段对照
-scroute fresh ...                # 忽略缓存强制刷新（出发前复核库存）
-scroute raw <参数>               # 透传全部高级参数
+SHIP="Railen"      # 你的船名，写个大概就行（如 "Hull B"），会自动匹配舱容
+CAPITAL=7000000    # 你账上有多少钱（aUEC）
+MIN_ROI=25         # 利润率低于多少不考虑
 ```
 
-高级参数（`scroute raw` 或 `python plan_route.py`）：
+**第 3 步：跑**
 
-```
---ship "Hull B" / --scu 640        船名（模糊匹配自动取舱容）或直接 SCU
---capital 7000000 [--full]         本金；默认只用一半（半仓红线），--full 押满
---min-roi 30                       最低 ROI%
---origin-system Pyro               限定出发星系
---dest-system Stanton              限定目的星系
---space-only                       仅空间站终端（排除地面手动搬箱哨站）
---qd-speed 262                     量子巡航速度 Mm/s（影响时薪）
---refresh                          强制刷新缓存
+```bash
+scroute
 ```
 
-示例（Pyro 出发、350 万全押、仅空间站）：
+## 跑完会看到什么
+
+```
+| # | 商品 | 买入站 @价(库存) | 卖出站 @价 | 距离 | 装/卸 | ROI | 利润 | 时薪 | 验证 |
+| 1 | Quartz | Shubin SM0-22 @2,964(1,050) | Pyro Gateway @5,400 | 68Gm | 手动/自动 | 82.2% | 155.9W | 211W/h | ✓82% |
+```
+
+一行就是一条能直接执行的路线，从左到右读：
+
+- **商品 + 买入站 @价(库存)**：去 Shubin SM0-22 买 Quartz，单价 2,964，站里现货 1,050 SCU，装得满你一船
+- **卖出站 @价**：拉到 Pyro Gateway 卖 5,400
+- **ROI**：这趟投入的利润率为 82.2%
+- **利润 / 时薪**：满仓一趟净赚约 156 万；把量子巡航、对接、装卸、空驶返程全算进去，折合约 211 万/小时
+- **验证 ✓**：已和官方 routes 数据交叉核对过，数字对得上
+
+表上还会标注：⚠️跨星系（要跳星门）、⚠️违禁品、「手动」表示装卸要自己动手搬箱（比自动装卸慢）。
+
+> 本金默认只押一半（留一半防意外），想全押加 `--full`。
+
+## 最常用的四个命令
+
+```bash
+scroute                        # 我现在不知道去哪 → 给我全局最赚的 15 条
+scroute from "Patch City"      # 我人在 Patch City → 从这出发买什么、卖到哪
+scroute to "Patch City"        # 我要回 Patch City → 半路买什么带回去卖
+scroute loop "Patch City"      # 我要跑往返 → 去程+返程一起算好
+```
+
+**出发前必做**：库存和价格半小时就变，临起飞前加 `fresh` 强制刷新复核一遍：
+
+```bash
+scroute fresh from "Patch City"
+```
+
+## 可选：双源核验（dual）
+
+UEX 和 SC Trade Tools 两家数据源互相对照，防止被单一来源的过期价格坑：
+
+```bash
+pip install pycryptodome        # 仅 dual 需要，多装这一个包
+scroute dual "Patch City"
+```
+
+站点改版可能导致对照失效，修复方法写在 `sctt_routes.py` 开头注释里。
+
+## 高级参数
+
+想精细控制时，用 `scroute raw` 把参数原样传给核心脚本（Windows 用户也是用这套参数直接跑 `python plan_route.py`）：
+
+```bash
+--ship "Hull B" / --scu 640        船名（模糊匹配自动取舱容）或直接给舱容 SCU 数
+--capital 7000000 [--full]         本金；默认只用一半，--full 全押
+--min-roi 30                       最低利润率 %
+--origin-system Pyro               只在 Pyro 星系出发
+--dest-system Stanton              只卖到 Stanton 星系
+--space-only                       只看空间站（排除要手动搬箱的地面哨站）
+--qd-speed 262                     你的量子巡航速度 Mm/s（影响时薪估算）
+--refresh                          不用缓存，强制拉最新数据
+```
+
+例：Pyro 出发、350 万全押、只停空间站：
 
 ```bash
 scroute raw --scu 640 --capital 3500000 --full --origin-system Pyro --space-only
 ```
 
-## 内置过滤规则
+临时换船/换本金不用改文件，直接加参数：`scroute --ship "Hull B" --capital 5000000 from Baijini`
 
-- 买入：`status_buy ≥ 5` 且 `scu_buy ≥ 舱容` 且 `买价 ≤ 预算 ÷ 舱容`
-- 卖出：`status_sell ≤ 2` 且 `需剩（scu_sell − scu_sell_stock）≥ 舱容`
-- 全局：`plan_route.py` 默认 ROI ≥ 30%；`scroute` 包装器默认 25%（均可用 `--min-roi` 调整）；本金默认最多押一半
+## 它的推荐逻辑（一句话版）
 
-`dual` 子命令的 SC Trade Tools 对照由 `sctt_routes.py` 提供，需 `pip install pycryptodome`。该站点改版可能导致对照失效，届时需重新抓取前端内嵌的 AES 字段（见 `sctt_routes.py` 开头注释）。
+同时满足三个条件才会出现在表里：**装得满一船**（买入站现货 ≥ 你的舱容）、**全额买得起**、**目的地卖得掉**（目的地的「预测需求 − 现有库存」还装得下你一船货）。装不满或卖不掉的路线直接不推荐，避免白跑。
 
 ## 数据说明
 
-价格来自 UEX 玩家众包上传，有延迟和误差，**出发前务必 `fresh` 复核库存**。本项目与 CIG / UEX 无隶属关系。
+价格来自 UEX 玩家众包上传，天然有延迟和误差。脚本的保守时薪是把空驶返程都算进去的下限，找到返程货实际会更高。**众包数据仅供参考，出发前务必 `fresh` 复核。** 本项目与 CIG / UEX 无隶属关系。
 
 ## License
 
