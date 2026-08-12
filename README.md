@@ -1,11 +1,12 @@
 # scroute · 星际公民货运路线速查
 
-一条命令告诉你：现在买什么货、去哪买、拉到哪卖、一趟赚多少、折合时薪多少。
-数据来自 UEX 玩家实时众包价格，不用开浏览器，不用翻表格。
+敲一条命令，它告诉你现在买什么货、去哪买、拉到哪卖、一趟净赚多少、折合时薪多少。价格来自 UEX 玩家实时众包，不开浏览器，不翻表格，结果直接打在终端里。
 
 ![使用方案卡片](docs/scroute-usage-card.png)
 
 ## 三分钟上手
+
+**前置条件**：Python 3.10+ 和 curl，Linux / macOS 一般自带。Windows 不装链接也能用，直接跑 `python plan_route.py`，参数见下文「高级参数」。
 
 **第 1 步：装**
 
@@ -14,8 +15,6 @@ git clone https://github.com/fatinghenji/scroute.git
 cd scroute
 ln -s "$PWD/scroute" ~/.local/bin/scroute   # 之后任意目录都能直接敲 scroute
 ```
-
-需要 Python 3.10+ 和 curl，Linux / macOS 都自带。Windows 直接用 `python plan_route.py` 跑，参数见下文「高级参数」。
 
 **第 2 步：改成你的船和本金**
 
@@ -99,15 +98,15 @@ scroute dual "Patch City"
 scroute raw --scu 640 --capital 3500000 --full --origin-system Pyro --space-only
 ```
 
-临时换船/换本金不用改文件，直接加参数：`scroute --ship "Hull B" --capital 5000000 from Baijini`
+临时换船或换本金不用改文件，直接加参数：`scroute --ship "Hull B" --capital 5000000 from Baijini`
 
-## 它的推荐逻辑（一句话版）
+## 它的推荐逻辑
 
-同时满足三个条件才会出现在表里：**装得满一船**（买入站现货 ≥ 你的舱容）、**全额买得起**、**目的地卖得掉**（目的地的「预测需求 − 现有库存」还装得下你一船货）。装不满或卖不掉的路线直接不推荐，避免白跑。
+一条路线要进这张表，得同时过三关。买入站的现货装得满你一船，本金买得起这一船，目的地的「预测需求 − 现有库存」还吃得下这一船。任何一关过不去，这趟就可能白跑，脚本干脆不推荐。
 
 ## 数据说明
 
-价格来自 UEX 玩家众包上传，天然有延迟和误差。脚本的保守时薪是把空驶返程都算进去的下限，找到返程货实际会更高。**众包数据仅供参考，出发前务必 `fresh` 复核。** 本项目与 CIG / UEX 无隶属关系。
+价格来自 UEX 玩家众包上传，天然有延迟和误差。脚本给的时薪是保守下限，连空驶返程都算进去了，找到返程货实际会更高。众包数据仅供参考，**出发前务必 `fresh` 复核**。本项目与 CIG / UEX 无隶属关系。
 
 ## License
 
