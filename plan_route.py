@@ -75,8 +75,9 @@ def demand_ok(demand, stock, scu):
     语义来源: uexcorp.space/api/documentation/id/get_commodities_prices
     demand = scu_sell(官方:预测需求)，stock = scu_sell_stock(官方:站点报告库存)。
     注意: scu_sell_users 官方定义为「近15天用户成交均量」而非在途量，不可当在途减。
+    demand=0（站点停止收购）与 stock 并存时必须按负剩余需求过滤，不能当未知放行。
     """
-    if demand and stock is not None:
+    if demand is not None and stock is not None:
         remain = demand - stock
         return remain >= scu, remain
     return True, None
