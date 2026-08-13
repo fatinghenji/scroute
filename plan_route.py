@@ -13,16 +13,23 @@
 流程: commodities + terminals + prices_all(带缓存) → 本地算价差候选
   或 routes 全站引导 → 候选 → 输出 Markdown 表（prices 模式附测距+交叉验证）
 
+网络: 直连超时/限速自动回退本机代理（scroute_net.py；UEX_PROXY/https_proxy 可指定，
+      默认 http://127.0.0.1:43010）。首次代理成功后本次运行直连代理，不再反复白付直连超时。
+
 坑: urllib socket 超时对慢速滴水传输无效（字节一直来），必须 curl --max-time 硬杀。
 """
-import argparse, json, os, subprocess, sys, tempfile, time, urllib.parse
+import argparse, heapq, json, os, sys, tempfile, time, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+from scroute_net import run_curl
 
 BASE = "https://api.uexcorp.uk/2.0"
 UA = "HermesAgent/1.0 (sc-cargo-workflow)"
 CACHE_DIR = Path(os.environ.get("UEX_CACHE_DIR", Path(tempfile.gettempdir()) / "uex_cache"))
 CACHE_TTL = 25 * 60  # 25 分钟（服务端缓存30分钟，宁可略早刷新）
+# --refresh 只清这些前缀（价格/库存类）；terminals/vehicles/dist_/t_ 静态元数据保留长缓存
+PRICE_CACHE_PREFIXES = ("prices_all", "p_", "routes_")
 MAX_TIME = 15  # 默认 curl 硬超时；大端点单独放宽
 RETRIES = 2
 MAX_WORKERS = 8  # 并行度（2026-08-09 实测：0.15s 间隔≈400/分 连发 10 次全 200，120/分不强制）
@@ -43,6 +50,53 @@ AUTO_MIN_PER_100SCU = 1.0   # 自动装/卸耗时 ~1 min/100 SCU（640 SCU ≈ 6
 MANUAL_BOX_S = 35  # 手动搬箱 s/箱（保守取值；25-45 区间内时薪结论排序基本不变）
 
 
+def norm(s):
+    return "".join(c for c in (s or "").lower() if c.isalnum())
+
+
+def name_match(target, name, code):
+    """站名/代号模糊匹配（prices 模式口径）：目标在站名内，或与代号完全相等。"""
+    if not target:
+        return True
+    t = norm(target)
+    return t in norm(name) or (bool(code) and t == norm(code))
+
+
+def route_match(target, name, code):
+    """routes 模式口径（保留原行为）：目标在「站名+代号」拼接串内即可。"""
+    if not target:
+        return True
+    return norm(target) in norm(name) + (norm(code) if code else "")
+
+
+def demand_ok(demand, stock, scu):
+    """卖出端剩余需求 ≥ 一船舱容才值得飞；返回 (ok, remaining|None)。
+
+    语义来源: uexcorp.space/api/documentation/id/get_commodities_prices
+    demand = scu_sell(官方:预测需求)，stock = scu_sell_stock(官方:站点报告库存)。
+    注意: scu_sell_users 官方定义为「近15天用户成交均量」而非在途量，不可当在途减。
+    """
+    if demand and stock is not None:
+        remain = demand - stock
+        return remain >= scu, remain
+    return True, None
+
+
+def term_sys_ok(t, sysname):
+    return not sysname or (t is not None and norm(sysname) in norm(t.get("star_system_name")))
+
+
+def term_space_ok(t, space_only):
+    return not space_only or (t is not None and bool(t.get("space_station_name")))
+
+
+def clear_price_caches(cache_dir):
+    """--refresh 只清价格/库存类缓存，静态元数据（terminals/vehicles/距离）保留长缓存。"""
+    for f in Path(cache_dir).glob("*.json"):
+        if f.stem.startswith(PRICE_CACHE_PREFIXES):
+            f.unlink()
+
+
 def leg_minutes(dist_gm, scu, buy_term, sell_term, qd_speed):
     """单腿耗时模型：起点(起降+装货) + QT巡航 + 终点(起降+卸货)。"""
     def stop_min(t, scu_load):
@@ -57,23 +111,22 @@ def leg_minutes(dist_gm, scu, buy_term, sell_term, qd_speed):
         return None
     return stop_min(buy_term, scu) + qt + stop_min(sell_term, scu)
 
+
 _lock = __import__("threading").Lock()
 _last_req = [0.0]
 
 
 def _get(url, timeout=MAX_TIME):
+    """限速 + 直连→代理回退 curl（回退逻辑在 scroute_net.run_curl）。"""
     with _lock:
         gap = MIN_GAP - (time.time() - _last_req[0])
         if gap > 0:
             time.sleep(gap)
         _last_req[0] = time.time()
-    r = subprocess.run(
-        ["curl", "-s", "--max-time", str(timeout), "--noproxy", "*",
-         "-H", f"User-Agent: {UA}", url],
-        capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"curl exit {r.returncode}")
-    return json.loads(r.stdout)
+    code, out = run_curl(url, timeout, UA)
+    if code != 0:
+        raise RuntimeError(f"curl exit {code}")
+    return json.loads(out)
 
 
 def fetch(endpoint, params=None, cache_key=None, ttl=CACHE_TTL, attempts=RETRIES + 1, timeout=MAX_TIME):
@@ -106,9 +159,9 @@ def load_prices(coms, terms_by_id):
     3) 逐商品 prices 兜底（不依赖 terminals，任何网络状况都能出结果）
     """
     d = fetch("commodities_prices_all", cache_key="prices_all", attempts=1, timeout=12)  # 大端点只试1次
-    if d and isinstance(d.get("data"), list):
+    if d and isinstance(d.get("data"), list) and d["data"]:
         return d["data"], "prices"
-    print("[warn] prices_all 不可用（服务端卡/慢）…", file=sys.stderr)
+    print("[warn] prices_all 不可用（服务端卡/慢/空数据）…", file=sys.stderr)
     if terms_by_id:
         rows = load_route_rows(terms_by_id)
         if rows:
@@ -206,8 +259,151 @@ def resolve_terms_for(cands, terms_by_id, terms_by_code):
                 r["_term"] = t
 
 
-def norm(s):
-    return "".join(c for c in (s or "").lower() if c.isalnum())
+def resolve_ship_scu(args):
+    """--ship 模糊匹配 UEX vehicles 取舱容；否则直接用 --scu。"""
+    if args.ship:
+        print(f"[info] 从 UEX vehicles 解析船名 '{args.ship}' 舱容…", file=sys.stderr)
+        vd = fetch("vehicles", cache_key="vehicles", ttl=24 * 3600, attempts=2, timeout=20)
+        if not vd or not isinstance(vd.get("data"), list):
+            sys.exit("vehicles 拉取失败，无法解析船名 → 舱容")
+        hits = [v for v in vd["data"] if norm(args.ship) in norm(v.get("name")) and v.get("is_spaceship")]
+        if not hits:
+            print("UEX vehicles 中无匹配。相近船名：",
+                  ", ".join(sorted({v.get("name") for v in vd["data"] if v.get("is_spaceship")})[:40]), file=sys.stderr)
+            sys.exit(f"未找到船名匹配 '{args.ship}'")
+        exact = [v for v in hits if norm(v.get("name")) == norm(args.ship)]
+        pick = (exact or hits)[0]
+        print(f"[info] 匹配: {pick['name']} → 舱容 {float(pick['scu']):.0f} SCU", file=sys.stderr)
+        return float(pick["scu"])
+    return args.scu
+
+
+def qd_speed_for(args):
+    """量子巡航速度：--qd-speed 显式指定 > 船名查标定表 > 兜底 250 Mm/s。"""
+    if args.qd_speed:
+        return args.qd_speed * 1e6
+    if args.ship and SHIP_QD_SPEED.get(norm(args.ship)):
+        return SHIP_QD_SPEED[norm(args.ship)]
+    print(f"[info] QD 速度未标定，用兜底 {DEFAULT_QD_SPEED/1e6:.0f} Mm/s（--qd-speed 可指定 Erkul 实测值）", file=sys.stderr)
+    return DEFAULT_QD_SPEED
+
+
+def build_cands_prices(price_rows, coms, terms_by_id, terms_by_code, args, scu, max_price):
+    """prices 模式：逐站商品价差配对成候选路线（三关：装得满/买得起/卖得动）。"""
+    n_origin, n_dest, n_commodity = norm(args.origin), norm(args.dest), norm(args.commodity)
+    buys, sells = {}, {}
+    for r in price_rows:
+        c = coms.get(r["id_commodity"])
+        if not c or not c.get("is_available_live"):
+            continue
+        t = (terms_by_id or {}).get(r["id_terminal"]) or (terms_by_code or {}).get(r.get("terminal_code"))
+        r["_term"] = t  # 全量失败时先置 None，候选阶段懒加载补
+        if t is not None and not t.get("is_available_live"):
+            continue
+        pb, ps = r.get("price_buy") or 0, r.get("price_sell") or 0
+        sb, ss = r.get("status_buy"), r.get("status_sell")
+        if pb > 0 and sb and sb >= 5 and (r.get("scu_buy") or 0) >= scu and pb <= max_price:
+            if not term_sys_ok(t, args.origin_system) or not term_space_ok(t, args.space_only):
+                continue
+            oname = f"{r.get('terminal_name') or ''} {t['name'] if t else ''}"
+            if not name_match(n_origin, oname, r.get("terminal_code")):
+                continue
+            buys.setdefault(r["id_commodity"], []).append(r)
+        if ps > 0 and ss and ss <= 2:
+            if not term_sys_ok(t, args.dest_system) or not term_space_ok(t, args.space_only):
+                continue
+            ok, remain = demand_ok(r.get("scu_sell"), r.get("scu_sell_stock"), scu)
+            if not ok:
+                continue  # 剩余需求装不满一船，飞到也卖不动
+            r["_demand_remaining"] = remain
+            sells.setdefault(r["id_commodity"], []).append(r)
+    cands = []
+    for cid, bl in buys.items():
+        if cid not in sells:
+            continue
+        c = coms[cid]
+        if n_commodity and n_commodity not in norm(c["name"]):
+            continue
+        for b in bl:
+            for s in sells[cid]:
+                if s["id_terminal"] == b["id_terminal"]:
+                    continue
+                sname = f"{s.get('terminal_name') or ''} {s['_term']['name'] if s.get('_term') else ''}"
+                if not name_match(n_dest, sname, s.get("terminal_code")):
+                    continue
+                roi = (s["price_sell"] - b["price_buy"]) / b["price_buy"] * 100
+                if roi < args.min_roi:
+                    continue
+                cands.append({"commodity": c["name"], "illegal": bool(c.get("is_illegal")),
+                              "buy": b, "sell": s, "roi": roi,
+                              "profit": (s["price_sell"] - b["price_buy"]) * scu,
+                              "cost": b["price_buy"] * scu})
+    return cands
+
+
+def build_cands_routes(route_rows, coms, terms_by_id, args, scu, max_price):
+    """routes 模式：官方路线直接过滤（prices_all 失败时）。"""
+    n_origin, n_dest, n_commodity = norm(args.origin), norm(args.dest), norm(args.commodity)
+    n_osys, n_dsys = norm(args.origin_system), norm(args.dest_system)
+    cands, seen = [], set()
+    for r in route_rows:
+        c = coms.get(r.get("id_commodity"))
+        if not c or not c.get("is_available_live"):
+            continue
+        po, pd = r.get("price_origin") or 0, r.get("price_destination") or 0
+        so, sd = r.get("status_origin"), r.get("status_destination")
+        if po <= 0 or pd <= 0 or po > max_price or not so or so < 5 or not sd or sd > 2:
+            continue
+        if (r.get("scu_origin") or 0) < scu:
+            continue
+        # 卖出端需求：scu_destination 为官方预测需求，< 一船舱容直接排除
+        # （routes 行无站点库存字段，无法像 prices 模式那样「需求−库存」）
+        if (r.get("scu_destination") or 0) < scu:
+            continue
+        if not route_match(n_origin, r.get("origin_terminal_name"), r.get("origin_terminal_code")):
+            continue
+        if n_osys and n_osys not in norm(r.get("origin_star_system_name") or ""):
+            continue
+        if n_dsys and n_dsys not in norm(r.get("destination_star_system_name") or ""):
+            continue
+        if args.space_only and not (r.get("is_space_station_origin") and r.get("is_space_station_destination")):
+            continue
+        if not route_match(n_dest, r.get("destination_terminal_name"), r.get("destination_terminal_code")):
+            continue
+        if n_commodity and n_commodity not in norm(c["name"]):
+            continue
+        roi = r.get("price_roi") or ((pd - po) / po * 100)
+        if roi < args.min_roi:
+            continue
+        key = (r.get("id_terminal_origin"), r.get("id_terminal_destination"), r.get("id_commodity"))
+        if key in seen:
+            continue
+        seen.add(key)
+        buy = {"terminal_name": r.get("origin_terminal_name"), "terminal_code": r.get("origin_terminal_code"),
+               "price_buy": po, "scu_buy": r.get("scu_origin"), "status_buy": so,
+               "id_terminal": r.get("id_terminal_origin"), "_term": terms_by_id.get(r.get("id_terminal_origin"))}
+        sell = {"terminal_name": r.get("destination_terminal_name"), "terminal_code": r.get("destination_terminal_code"),
+                "price_sell": pd, "scu_sell": r.get("scu_destination"), "status_sell": sd,
+                "id_terminal": r.get("id_terminal_destination"), "_term": terms_by_id.get(r.get("id_terminal_destination"))}
+        cands.append({"commodity": c["name"], "illegal": bool(c.get("is_illegal")),
+                      "buy": buy, "sell": sell, "roi": roi,
+                      "profit": (pd - po) * scu, "cost": po * scu,
+                      "dist": r.get("distance"), "_official": True})
+    return cands
+
+
+def estimate_hourly(cands, scu, qd_speed):
+    """时薪估算：单腿耗时（含装卸）+ 保守口径（含空驶返程 QT）。"""
+    for c in cands:
+        leg = leg_minutes(float(c["dist"]) if c.get("dist") else None, scu,
+                          c["buy"].get("_term"), c["sell"].get("_term"), qd_speed)
+        if leg is None:
+            c["_hourly"] = None
+            continue
+        # 空驶返程：QT 时间 + 一次起降（无装卸）
+        back_qt = (float(c["dist"]) * 1e9 / qd_speed + SPOOL_S) / 60
+        roundtrip = leg + back_qt + DOCK_MIN
+        c["_hourly"] = c["profit"] / roundtrip * 60  # aUEC/h，保守口径
 
 
 def main():
@@ -225,41 +421,19 @@ def main():
     ap.add_argument("--min-roi", type=float, default=30, help="最低 ROI%%（默认 30）")
     ap.add_argument("--top", type=int, default=15, help="输出条数（默认 15）")
     ap.add_argument("--dist-top", type=int, default=5, help="测距候选数（默认 5）")
-    ap.add_argument("--refresh", action="store_true", help="忽略缓存强制刷新")
+    ap.add_argument("--refresh", action="store_true", help="忽略缓存强制刷新价格/库存（静态元数据保留长缓存）")
     ap.add_argument("--qd-speed", type=float, default=None,
                     help="量子巡航速度 Mm/s（Erkul driveSpeed，如 262）。默认按 --ship 查内置标定表")
     args = ap.parse_args()
     t_start = time.time()
 
     if args.refresh:
-        for f in CACHE_DIR.glob("*.json"):
-            f.unlink()
+        clear_price_caches(CACHE_DIR)
 
-    scu = args.scu
-    if args.ship:
-        print(f"[info] 从 UEX vehicles 解析船名 '{args.ship}' 舱容…", file=sys.stderr)
-        vd = fetch("vehicles", cache_key="vehicles", ttl=24 * 3600, attempts=2, timeout=20)
-        if not vd or not isinstance(vd.get("data"), list):
-            sys.exit("vehicles 拉取失败，无法解析船名 → 舱容")
-        hits = [v for v in vd["data"] if norm(args.ship) in norm(v.get("name")) and v.get("is_spaceship")]
-        if not hits:
-            print("UEX vehicles 中无匹配。相近船名：",
-                  ", ".join(sorted({v.get("name") for v in vd["data"] if v.get("is_spaceship")})[:40]), file=sys.stderr)
-            sys.exit(f"未找到船名匹配 '{args.ship}'")
-        exact = [v for v in hits if norm(v.get("name")) == norm(args.ship)]
-        pick = (exact or hits)[0]
-        scu = float(pick["scu"])
-        print(f"[info] 匹配: {pick['name']} → 舱容 {scu:.0f} SCU", file=sys.stderr)
+    scu = resolve_ship_scu(args)
     if not scu:
         sys.exit("必须提供 --scu 或 --ship")
-
-    # 量子巡航速度：--qd-speed 显式指定 > 船名查标定表 > 兜底 250
-    qd_speed = args.qd_speed * 1e6 if args.qd_speed else None
-    if qd_speed is None and args.ship:
-        qd_speed = SHIP_QD_SPEED.get(norm(args.ship))
-    if qd_speed is None:
-        qd_speed = DEFAULT_QD_SPEED
-        print(f"[info] QD 速度未标定，用兜底 {DEFAULT_QD_SPEED/1e6:.0f} Mm/s（--qd-speed 可指定 Erkul 实测值）", file=sys.stderr)
+    qd_speed = qd_speed_for(args)
 
     budget = args.capital if args.full else args.capital / 2
     max_price = budget / scu
@@ -280,115 +454,12 @@ def main():
     _t = time.time()
     print("[info] 拉取价格数据…", file=sys.stderr)
     price_rows, mode = load_prices(coms, terms_by_id)
-    cands = []
-
-    def term_sys_ok(t, sysname):
-        return not sysname or (t is not None and norm(sysname) in norm(t.get("star_system_name")))
-
-    def term_space_ok(t):
-        return not args.space_only or (t is not None and bool(t.get("space_station_name")))
-
-    if mode == "prices":
-        # —— prices 模式：逐站商品价差（prices_all 成功时）——
-        buys, sells = {}, {}
-        for r in price_rows:
-            c = coms.get(r["id_commodity"])
-            if not c or not c.get("is_available_live"):
-                continue
-            t = (terms_by_id or {}).get(r["id_terminal"]) or (terms_by_code or {}).get(r.get("terminal_code"))
-            r["_term"] = t  # 全量失败时先置 None，候选阶段懒加载补
-            if t is not None and not t.get("is_available_live"):
-                continue
-            pb, ps = r.get("price_buy") or 0, r.get("price_sell") or 0
-            sb, ss = r.get("status_buy"), r.get("status_sell")
-            if pb > 0 and sb and sb >= 5 and (r.get("scu_buy") or 0) >= scu and pb <= max_price:
-                if not term_sys_ok(t, args.origin_system) or not term_space_ok(t):
-                    continue
-                oname = norm(r.get("terminal_name")) + (norm(t["name"]) if t else "")
-                if not args.origin or norm(args.origin) in oname or norm(args.origin) == norm(r.get("terminal_code")):
-                    buys.setdefault(r["id_commodity"], []).append(r)
-            if ps > 0 and ss and ss <= 2:
-                if not term_sys_ok(t, args.dest_system) or not term_space_ok(t):
-                    continue
-                # 剩余需求 = scu_sell(官方:预测需求) − scu_sell_stock(官方:站点报告库存)
-                # 语义来源: uexcorp.space/api/documentation/id/get_commodities_prices
-                # 注意: scu_sell_users 官方定义为「近15天用户成交均量」而非在途量，不可当在途减
-                demand, stock = r.get("scu_sell"), r.get("scu_sell_stock")
-                if demand and stock is not None:
-                    remain = demand - stock
-                    if remain < scu:
-                        continue  # 剩余需求装不满一船，飞到也卖不动
-                    r["_demand_remaining"] = remain
-                else:
-                    r["_demand_remaining"] = None
-                sells.setdefault(r["id_commodity"], []).append(r)
-        for cid, bl in buys.items():
-            if cid not in sells:
-                continue
-            c = coms[cid]
-            if args.commodity and norm(args.commodity) not in norm(c["name"]):
-                continue
-            for b in bl:
-                for s in sells[cid]:
-                    if s["id_terminal"] == b["id_terminal"]:
-                        continue
-                    if args.dest:
-                        sname = norm(s.get("terminal_name")) + (norm(s["_term"]["name"]) if s.get("_term") else "")
-                        if norm(args.dest) not in sname and norm(args.dest) != norm(s.get("terminal_code")):
-                            continue
-                    roi = (s["price_sell"] - b["price_buy"]) / b["price_buy"] * 100
-                    if roi < args.min_roi:
-                        continue
-                    cands.append({"commodity": c["name"], "illegal": bool(c.get("is_illegal")),
-                                  "buy": b, "sell": s, "roi": roi,
-                                  "profit": (s["price_sell"] - b["price_buy"]) * scu,
-                                  "cost": b["price_buy"] * scu})
-    else:
-        # —— routes 模式：官方路线直接过滤（prices_all 失败时）——
-        route_rows = price_rows
-        seen = set()
-        for r in route_rows:
-            c = coms.get(r.get("id_commodity"))
-            if not c or not c.get("is_available_live"):
-                continue
-            po, pd = r.get("price_origin") or 0, r.get("price_destination") or 0
-            so, sd = r.get("status_origin"), r.get("status_destination")
-            if po <= 0 or pd <= 0 or po > max_price or not so or so < 5 or not sd or sd > 2:
-                continue
-            if (r.get("scu_origin") or 0) < scu:
-                continue
-            if args.origin and norm(args.origin) not in norm(r.get("origin_terminal_name") or "") + norm(r.get("origin_terminal_code") or ""):
-                continue
-            if args.origin_system and norm(args.origin_system) not in norm(r.get("origin_star_system_name") or ""):
-                continue
-            if args.dest_system and norm(args.dest_system) not in norm(r.get("destination_star_system_name") or ""):
-                continue
-            if args.space_only and not (r.get("is_space_station_origin") and r.get("is_space_station_destination")):
-                continue
-            if args.dest and norm(args.dest) not in norm(r.get("destination_terminal_name") or "") + norm(r.get("destination_terminal_code") or ""):
-                continue
-            if args.commodity and norm(args.commodity) not in norm(c["name"]):
-                continue
-            roi = r.get("price_roi") or ((pd - po) / po * 100)
-            if roi < args.min_roi:
-                continue
-            key = (r.get("id_terminal_origin"), r.get("id_terminal_destination"), r.get("id_commodity"))
-            if key in seen:
-                continue
-            seen.add(key)
-            buy = {"terminal_name": r.get("origin_terminal_name"), "terminal_code": r.get("origin_terminal_code"),
-                   "price_buy": po, "scu_buy": r.get("scu_origin"), "status_buy": so,
-                   "id_terminal": r.get("id_terminal_origin"), "_term": terms_by_id.get(r.get("id_terminal_origin"))}
-            sell = {"terminal_name": r.get("destination_terminal_name"), "terminal_code": r.get("destination_terminal_code"),
-                    "price_sell": pd, "scu_sell": r.get("scu_destination"), "status_sell": sd,
-                    "id_terminal": r.get("id_terminal_destination"), "_term": terms_by_id.get(r.get("id_terminal_destination"))}
-            cands.append({"commodity": c["name"], "illegal": bool(c.get("is_illegal")),
-                          "buy": buy, "sell": sell, "roi": roi,
-                          "profit": (pd - po) * scu, "cost": po * scu,
-                          "dist": r.get("distance"), "_official": True})
+    cands = (build_cands_prices(price_rows, coms, terms_by_id, terms_by_code, args, scu, max_price)
+             if mode == "prices"
+             else build_cands_routes(price_rows, coms, terms_by_id, args, scu, max_price))
     print(f"[timing] prices/routes {time.time()-_t:.1f}s", file=sys.stderr)
-    cands.sort(key=lambda x: -x["profit"])
-    cands = cands[: args.top]
+    # 只留 Top N：nlargest 免全量排序
+    cands = heapq.nlargest(args.top, cands, key=lambda x: x["profit"])
 
     if not terms_by_id:
         print(f"[info] 懒加载站点元数据（候选涉及 {len(set(r['terminal_name'] for c in cands for r in (c['buy'], c['sell'])))} 个站）…", file=sys.stderr)
@@ -439,23 +510,13 @@ def main():
                     verified[(cn, oid, did)] = roi
         print(f"[timing] 交叉验证 {time.time()-_t:.1f}s", file=sys.stderr)
 
+    estimate_hourly(cands, scu, qd_speed)
+
     def load_mark(r):
         t = r.get("_term")
         if t is None:
             return "?"
         return "自动" if t.get("is_auto_load") else f"手动(≤{t.get('max_container_size')}SCU箱)"
-
-    # —— 时薪估算：单腿耗时（含装卸）+ 保守口径（含空驶返程 QT）——
-    for c in cands:
-        leg = leg_minutes(float(c["dist"]) if c.get("dist") else None, scu,
-                          c["buy"].get("_term"), c["sell"].get("_term"), qd_speed)
-        if leg is None:
-            c["_hourly"] = None
-            continue
-        # 空驶返程：QT 时间 + 一次起降（无装卸）
-        back_qt = (float(c["dist"]) * 1e9 / qd_speed + SPOOL_S) / 60
-        roundtrip = leg + back_qt + DOCK_MIN
-        c["_hourly"] = c["profit"] / roundtrip * 60  # aUEC/h，保守口径
 
     def sys_of(r):
         t = r.get("_term")

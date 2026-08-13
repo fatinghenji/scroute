@@ -12,9 +12,13 @@
 #   scroute raw <原样参数...>         # 透传给 plan_route.py
 #
 # 数据: UEX API 2.0 众包价，服务端缓存 ~30 分钟。脚本缓存在 /tmp/uex_cache（25 分钟）。
+# fresh 只刷第一段：loop/dual 的后几段直接复用第一段写好的缓存，避免重复清缓存重拉。
+# 网络: 直连超时/限速自动回退代理（UEX_PROXY/https_proxy 指定，默认 http://127.0.0.1:43010）。
 
-SCRIPT="$(dirname "$(readlink -f "$0")")/plan_route.py"
-SCTT="$(dirname "$(readlink -f "$0")")/sctt_routes.py"
+# 解析真实路径（兼容 macOS BSD：readlink 无 -f，改用 python realpath）
+SELF="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")"
+SCRIPT="$(dirname "$SELF")/plan_route.py"
+SCTT="$(dirname "$SELF")/sctt_routes.py"
 SHIP="Railen"
 CAPITAL=7000000
 MIN_ROI=25
@@ -42,22 +46,37 @@ done
 
 run() {
   local -a args=(--ship "$SHIP" --capital "$CAPITAL" --min-roi "$MIN_ROI" --top "$TOP")
-  (( FRESH )) && args+=(--refresh)
+  if (( FRESH )); then
+    args+=(--refresh)
+    FRESH=0   # 同一次运行只刷第一段，后续段复用缓存
+  fi
   python3 "$SCRIPT" "${args[@]}" "$@" "${EXTRA[@]}"
 }
 
 if [[ "$MODE" == "dual" ]]; then
+  # SCTT 与 UEX 本金口径对齐：UEX 默认半仓，SCTT 也按半仓；用户显式 --full 时两边都全押
+  INV="$CAPITAL"
+  if [[ " ${EXTRA[*]:-} " != *" --full "* ]]; then
+    INV=$((CAPITAL / 2))
+  fi
+  sctt_args=(--ship "$SHIP" --investment "$INV" --top "$TOP")
+  sctt_fresh=0
+  (( FRESH )) && sctt_fresh=1   # SCTT 缓存键只含 ship|investment，第一段刷一次即可
   echo "════════ 去程 UEX：从 $PLACE 出发 ════════"
   run --origin "$PLACE"
   echo
   echo "════════ 去程 SCTT（双源比对） ════════"
-  python3 "$SCTT" --ship "$SHIP" --investment "$CAPITAL" --origin "$PLACE" --top "$TOP"
+  if (( sctt_fresh )); then
+    python3 "$SCTT" "${sctt_args[@]}" --refresh --origin "$PLACE"
+  else
+    python3 "$SCTT" "${sctt_args[@]}" --origin "$PLACE"
+  fi
   echo
   echo "════════ 返程 UEX：回 $PLACE 卖 ════════"
   run --dest "$PLACE"
   echo
   echo "════════ 返程 SCTT（双源比对） ════════"
-  python3 "$SCTT" --ship "$SHIP" --investment "$CAPITAL" --dest "$PLACE" --top "$TOP"
+  python3 "$SCTT" "${sctt_args[@]}" --dest "$PLACE"
 elif [[ "$MODE" == "loop" ]]; then
   echo "════════ 去程：从 $PLACE 出发 ════════"
   run --origin "$PLACE"

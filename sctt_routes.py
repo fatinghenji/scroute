@@ -7,37 +7,42 @@
   3. POST /api/tools/trades  body 同前端 trade-routes 页（2026-08-12 抓取）
 AES key 内嵌于前端 main.js（站点改版会变，失效时重新抓前端 main.js 的 clientVersion/aes 字段）。
 
+结果按 (ship, investment) 缓存 25 分钟（与 plan_route 同目录 /tmp/uex_cache，
+UEX_CACHE_DIR 环境变量可改），避免 dual 每次重复拉；--refresh 强制刷新。
+网络: 直连失败自动回退本机代理（scroute_net.py，与 plan_route 共用同一套逻辑）。
+
 用法:
-  sctt_routes.py [--ship Railen] [--investment 7000000] [--top 10] [--origin "Patch City"]
+  sctt_routes.py [--ship Railen] [--investment 7000000] [--top 10]
+                 [--origin "Patch City"] [--refresh]
 输出: Markdown 表（买站/商品/SCU/金额 → 卖站/金额/利润），供与 UEX plan_route.py 双源比对。
 """
-import argparse, base64, json, os, subprocess, sys, time
+import argparse, base64, hashlib, json, os, sys, tempfile, time
+from pathlib import Path
 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
+
+from scroute_net import run_curl
 
 BASE = "https://sc-trade.tools"
 AES_B64 = "YAQqYsrYmYIc9WxvCZF4W5yp6FaIb7h6"  # 前端 main.js 内嵌
 OP = "getTradeRoutes"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+CACHE_DIR = Path(os.environ.get("UEX_CACHE_DIR", Path(tempfile.gettempdir()) / "uex_cache"))
+CACHE_TTL = 25 * 60  # 25 分钟（对齐 plan_route 价格缓存）
 
 
 def curl(url, headers=None, data=None):
-    cmd = ["curl", "-s", "--noproxy", "*", "-m", "45",
-           "-H", f"User-Agent: {UA}",
-           "-H", "Accept: application/json, text/plain, */*"]
-    for k, v in (headers or {}).items():
-        cmd += ["-H", f"{k}: {v}"]
-    if data is not None:
-        cmd += ["-H", "Content-Type: application/json", "-d", data]
-    cmd.append(url)
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    if r.returncode != 0:
-        raise RuntimeError(f"curl exit {r.returncode}: {r.stderr[:200]}")
-    return r.stdout
+    hdrs = {"Accept": "application/json, text/plain, */*"}
+    hdrs.update(headers or {})
+    code, out = run_curl(url, 45, UA, hdrs, data)
+    if code != 0:
+        raise RuntimeError(f"curl exit {code}: {out[:200]}")
+    return out
 
 
-def sync_delay(samples=5):
+def sync_delay(samples=3):
+    """校时：多次采样取最小 RTT 的那次时钟偏移（3 次足够，兼顾请求量）。"""
     best = None
     for _ in range(samples):
         t0 = time.time_ns() // 10**6
@@ -47,7 +52,7 @@ def sync_delay(samples=5):
         delay = (t0 + t1) // 2 - epoch
         if best is None or rtt < best[0]:
             best = (rtt, delay)
-        time.sleep(0.15)
+        time.sleep(0.1)
     return best[1]
 
 
@@ -66,7 +71,8 @@ def main():
     ap.add_argument("--top", type=int, default=10)
     ap.add_argument("--origin", help="只保留从该站出发的路线（模糊匹配）")
     ap.add_argument("--dest", help="只保留卖到该站的路线（模糊匹配）")
-    ap.add_argument("--json", action="store_true", help="输出原始 JSON（调试用）")
+    ap.add_argument("--refresh", action="store_true", help="忽略缓存强制刷新")
+    ap.add_argument("--json", action="store_true", help="输出原始 JSON（调试用，绕过缓存）")
     args = ap.parse_args()
 
     body = {"ship": args.ship, "investment": args.investment, "profitType": "time",
@@ -79,15 +85,25 @@ def main():
             "factionNames": [], "factionsNamesType": "blacklist",
             "minSecurityLevel": 1, "supportedBoxSizeInScu": 1, "avoidHiddenLocations": True}
 
-    delay = sync_delay()
-    raw = curl(f"{BASE}/api/tools/trades", {"token": make_token(OP, delay)},
-               json.dumps(body))
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        sys.exit(f"SCTT 拒绝: {raw[:200]}")  # 403 CAPTCHA / 站点改版
-    if not isinstance(data, list):
-        sys.exit(f"unexpected: {raw[:200]}")
+    # 响应体与 origin/dest 无关（过滤在本地做），按 (ship, investment) 缓存即可
+    cache_f = CACHE_DIR / f"sctt_{hashlib.md5(f'{args.ship}|{args.investment}'.encode()).hexdigest()}.json"
+    data = None
+    if not args.json and not args.refresh:
+        if cache_f.exists() and time.time() - cache_f.stat().st_mtime < CACHE_TTL:
+            data = json.loads(cache_f.read_text())
+    if data is None:
+        delay = sync_delay()
+        raw = curl(f"{BASE}/api/tools/trades", {"token": make_token(OP, delay)},
+                   json.dumps(body))
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            sys.exit(f"SCTT 拒绝: {raw[:200]}")  # 403 CAPTCHA / 站点改版
+        if not isinstance(data, list):
+            sys.exit(f"unexpected: {raw[:200]}")
+        if not args.json:
+            CACHE_DIR.mkdir(exist_ok=True)
+            cache_f.write_text(json.dumps(data))
     if args.json:
         print(json.dumps(data[:2], ensure_ascii=False, indent=1))
         return
