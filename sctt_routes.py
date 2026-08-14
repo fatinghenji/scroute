@@ -5,6 +5,10 @@
   1. GET /api/system/epoch 多次采样取最小 RTT 校时
   2. token = base64(iv) + base64(AES-CBC(  "<op>@<server_ms>" ))，op=getTradeRoutes
   3. POST /api/tools/trades  body 同前端 trade-routes 页（2026-08-12 抓取）
+  4. --circuit N：取第 N 条路线的 id，POST /api/tools/circuits/{id}（body 同上，
+     op=getCircuit），返回环形路线各腿（2026-08-14 依官方 OpenAPI /v3/api-docs
+     + 前端 chunk 734.js 复核：itineraryUrl=/api/tools/itinerary op=getItinerary，
+     circuitUrl=/api/tools/circuits/ op=getCircuit，body 均为对应 FormDto）
 AES key 内嵌于前端 main.js（站点改版会变，失效时重新抓前端 main.js 的 clientVersion/aes 字段）。
 
 结果按 (ship, investment) 缓存 25 分钟（与 plan_route 同目录 /tmp/uex_cache，
@@ -14,7 +18,9 @@ UEX_CACHE_DIR 环境变量可改），避免 dual 每次重复拉；--refresh �
 用法:
   sctt_routes.py [--ship Railen] [--investment 7000000] [--top 10]
                  [--origin "Patch City"] [--refresh]
+  sctt_routes.py --circuit 1 [--origin X]   # 展开第 N 条（过滤后序号）为环形路线
 输出: Markdown 表（买站/商品/SCU/金额 → 卖站/金额/利润），供与 UEX plan_route.py 双源比对。
+      --circuit 模式输出该路线闭环各腿（含返程腿，全程不空载）。
 """
 import argparse, base64, hashlib, json, os, sys, tempfile, time
 from pathlib import Path
@@ -27,6 +33,7 @@ from scroute_net import run_curl
 BASE = "https://sc-trade.tools"
 AES_B64 = "YAQqYsrYmYIc9WxvCZF4W5yp6FaIb7h6"  # 前端 main.js 内嵌
 OP = "getTradeRoutes"
+OP_CIRCUIT = "getCircuit"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 CACHE_DIR = Path(os.environ.get("UEX_CACHE_DIR", Path(tempfile.gettempdir()) / "uex_cache"))
 CACHE_TTL = 25 * 60  # 25 分钟（对齐 plan_route 价格缓存）
@@ -73,6 +80,8 @@ def main():
     ap.add_argument("--dest", help="只保留卖到该站的路线（模糊匹配）")
     ap.add_argument("--refresh", action="store_true", help="忽略缓存强制刷新")
     ap.add_argument("--json", action="store_true", help="输出原始 JSON（调试用，绕过缓存）")
+    ap.add_argument("--circuit", type=int, metavar="N",
+                    help="展开过滤后第 N 条路线为环形路线（POST /api/tools/circuits/{id}）")
     args = ap.parse_args()
 
     body = {"ship": args.ship, "investment": args.investment, "profitType": "time",
@@ -120,6 +129,35 @@ def main():
         routes = [r for r in routes if norm(args.origin) in norm(r.get("origin", {}).get("shop"))]
     if args.dest:
         routes = [r for r in routes if norm(args.dest) in norm(r.get("destination", {}).get("shop"))]
+
+    if args.circuit:
+        if not (1 <= args.circuit <= len(routes)):
+            sys.exit(f"--circuit 超出范围（过滤后共 {len(routes)} 条）")
+        pick = routes[args.circuit - 1]
+        delay = sync_delay()
+        raw = curl(f"{BASE}/api/tools/circuits/{pick['id']}",
+                   {"token": make_token(OP_CIRCUIT, delay)}, json.dumps(body))
+        try:
+            legs = json.loads(raw)
+        except json.JSONDecodeError:
+            sys.exit(f"SCTT 拒绝: {raw[:200]}")
+        if not isinstance(legs, list):
+            sys.exit(f"unexpected: {raw[:200]}")
+        o0, d0 = pick.get("origin", {}), pick.get("destination", {})
+        print(f"## SCTT 环形路线 #{args.circuit}（{args.ship} · {args.investment:,} aUEC · "
+              f"{o0.get('itemName')}：{o0.get('shop')} → {d0.get('shop')}）共 {len(legs)} 腿\n")
+        print("| 腿 | 商品 | 买入站 @单价 | 卖出站 @单价 | 利润 | 耗时 |")
+        print("|---|---|---|---|---|---|")
+        tp = tt = 0
+        for i, r in enumerate(legs, 1):
+            o, d = r.get("origin", {}), r.get("destination", {})
+            tp += r.get("profit") or 0
+            tt += r.get("timeInSeconds") or 0
+            print(f"| {i} | {o.get('itemName')} | {o.get('shop')} @{unit(o):,.0f} | "
+                  f"{d.get('shop')} @{unit(d):,.0f} | {(r.get('profit') or 0)/1e4:.1f}W | "
+                  f"{(r.get('timeInSeconds') or 0)//60}min |")
+        print(f"\n**全程：利润 {tp/1e4:.1f}W · 耗时 {tt//60}min（闭环不空载）**")
+        return
 
     print(f"## SCTT 路线（{args.ship} · {args.investment:,} aUEC"
           f"{' · 起点 ' + args.origin if args.origin else ''}）共 {len(routes)} 条\n")
