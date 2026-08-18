@@ -128,7 +128,7 @@ class BuildCandsPricesTest(unittest.TestCase):
         ]
         args = types.SimpleNamespace(origin=None, dest=None, commodity=None,
                                      origin_system=None, dest_system=None,
-                                     space_only=False, min_roi=25)
+                                     space_only=False, min_roi=25, min_profit=0)
         cands = pr.build_cands_prices(rows, coms, {10: buy_term, 11: sell_term}, {}, args, 640, 10_000)
         self.assertEqual(len(cands), 1)
         c = cands[0]
@@ -151,15 +151,38 @@ class BuildCandsPricesTest(unittest.TestCase):
         ]
         args = types.SimpleNamespace(origin="Elsewhere", dest=None, commodity=None,
                                      origin_system=None, dest_system=None,
-                                     space_only=False, min_roi=25)
+                                     space_only=False, min_roi=25, min_profit=0)
         self.assertEqual(pr.build_cands_prices(rows, coms, {}, {}, args, 640, 10_000), [])
+
+    def test_min_profit_filter(self):
+        # 该夹具 profit = (5400-2964)*640 = 1,559,040；阈值高于它应被过滤，低于它应保留
+        coms = {1: {"name": "Quartz", "is_available_live": True, "is_illegal": False}}
+        buy_term = {"id": 10, "name": "Shubin SM0-22", "code": "SM022",
+                    "is_available_live": True, "is_auto_load": True, "star_system_name": "Pyro"}
+        sell_term = {"id": 11, "name": "Pyro Gateway", "code": "PYGW",
+                     "is_available_live": True, "is_auto_load": True, "star_system_name": "Stanton"}
+        rows = [
+            {"id_commodity": 1, "id_terminal": 10, "terminal_name": "Shubin SM0-22", "terminal_code": "SM022",
+             "price_buy": 2964, "status_buy": 6, "scu_buy": 1050, "price_sell": 0,
+             "status_sell": None, "scu_sell": None, "scu_sell_stock": None},
+            {"id_commodity": 1, "id_terminal": 11, "terminal_name": "Pyro Gateway", "terminal_code": "PYGW",
+             "price_buy": 0, "status_buy": None, "scu_buy": 0, "price_sell": 5400,
+             "status_sell": 1, "scu_sell": 5000, "scu_sell_stock": 800},
+        ]
+        profit = (5400 - 2964) * 640
+        base = dict(origin=None, dest=None, commodity=None, origin_system=None,
+                    dest_system=None, space_only=False, min_roi=25)
+        args = types.SimpleNamespace(**base, min_profit=profit + 1)
+        self.assertEqual(pr.build_cands_prices(rows, coms, {10: buy_term, 11: sell_term}, {}, args, 640, 10_000), [])
+        args = types.SimpleNamespace(**base, min_profit=profit - 1)
+        self.assertEqual(len(pr.build_cands_prices(rows, coms, {10: buy_term, 11: sell_term}, {}, args, 640, 10_000)), 1)
 
 
 class BuildCandsRoutesTest(unittest.TestCase):
     def _args(self):
         return types.SimpleNamespace(origin=None, dest=None, commodity=None,
                                      origin_system=None, dest_system=None,
-                                     space_only=False, min_roi=25)
+                                     space_only=False, min_roi=25, min_profit=0)
 
     def _row(self, scu_dest=5000):
         return {"id_commodity": 1, "price_origin": 2964, "price_destination": 5400,

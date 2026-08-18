@@ -335,9 +335,12 @@ def build_cands_prices(price_rows, coms, terms_by_id, terms_by_code, args, scu, 
                 roi = (s["price_sell"] - b["price_buy"]) / b["price_buy"] * 100
                 if roi < args.min_roi:
                     continue
+                profit = (s["price_sell"] - b["price_buy"]) * scu
+                if profit < args.min_profit:
+                    continue
                 cands.append({"commodity": c["name"], "illegal": bool(c.get("is_illegal")),
                               "buy": b, "sell": s, "roi": roi,
-                              "profit": (s["price_sell"] - b["price_buy"]) * scu,
+                              "profit": profit,
                               "cost": b["price_buy"] * scu})
     return cands
 
@@ -376,6 +379,9 @@ def build_cands_routes(route_rows, coms, terms_by_id, args, scu, max_price):
         roi = r.get("price_roi") or ((pd - po) / po * 100)
         if roi < args.min_roi:
             continue
+        profit = (pd - po) * scu
+        if profit < args.min_profit:
+            continue
         key = (r.get("id_terminal_origin"), r.get("id_terminal_destination"), r.get("id_commodity"))
         if key in seen:
             continue
@@ -388,7 +394,7 @@ def build_cands_routes(route_rows, coms, terms_by_id, args, scu, max_price):
                 "id_terminal": r.get("id_terminal_destination"), "_term": terms_by_id.get(r.get("id_terminal_destination"))}
         cands.append({"commodity": c["name"], "illegal": bool(c.get("is_illegal")),
                       "buy": buy, "sell": sell, "roi": roi,
-                      "profit": (pd - po) * scu, "cost": po * scu,
+                      "profit": profit, "cost": po * scu,
                       "dist": r.get("distance"), "_official": True})
     return cands
 
@@ -420,6 +426,7 @@ def main():
     ap.add_argument("--space-only", action="store_true", help="仅限空间站终端（出发+到达，对齐 UEX-Trader Space Only）")
     ap.add_argument("--commodity", help="限定商品（模糊匹配，如 quartz）")
     ap.add_argument("--min-roi", type=float, default=30, help="最低 ROI%%（默认 30）")
+    ap.add_argument("--min-profit", type=float, default=0, help="最低绝对利润 aUEC（默认 0 = 不过滤）")
     ap.add_argument("--top", type=int, default=15, help="输出条数（默认 15）")
     ap.add_argument("--dist-top", type=int, default=5, help="测距候选数（默认 5）")
     ap.add_argument("--refresh", action="store_true", help="忽略缓存强制刷新价格/库存（静态元数据保留长缓存）")
@@ -525,7 +532,8 @@ def main():
 
     print(f"\n# 规划参数: {scu:.0f} SCU{(' (' + args.ship + ')') if args.ship else ''} · 本金 {args.capital/1e4:.0f}W"
           f"{'（满仓）' if args.full else '（半仓红线 ' + format(budget/1e4, '.0f') + 'W）'}"
-          f" · 买价上限 {max_price:,.0f}/SCU · ROI≥{args.min_roi}%\n")
+          f" · 买价上限 {max_price:,.0f}/SCU · ROI≥{args.min_roi}%"
+          f"{f' · 利润≥{args.min_profit/1e4:.0f}W' if args.min_profit else ''}\n")
     print("| # | 商品 | 买入站 @价(库存) | 卖出站 @价 | 星系 | 距离 | 装/卸 | ROI | 利润 | 成本 | 时薪 | 验证 |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for i, c in enumerate(cands, 1):

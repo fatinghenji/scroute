@@ -22,6 +22,7 @@ SCTT="$(dirname "$SELF")/sctt_routes.py"
 SHIP="Railen"
 CAPITAL=7000000
 MIN_ROI=25
+MIN_PROFIT=0
 TOP=15
 FRESH=0
 MODE=""
@@ -38,6 +39,7 @@ while [[ $# -gt 0 ]]; do
     --ship) SHIP="$2"; shift 2 ;;
     --capital) CAPITAL="$2"; shift 2 ;;
     --min-roi) MIN_ROI="$2"; shift 2 ;;
+    --min-profit) MIN_PROFIT="$2"; shift 2 ;;
     --top) TOP="$2"; shift 2 ;;
     raw) shift; exec python3 "$SCRIPT" "$@" ;;
     *) EXTRA+=("$1"); shift ;;
@@ -45,7 +47,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 run() {
-  local -a args=(--ship "$SHIP" --capital "$CAPITAL" --min-roi "$MIN_ROI" --top "$TOP")
+  local -a args=(--ship "$SHIP" --capital "$CAPITAL" --min-roi "$MIN_ROI" --min-profit "$MIN_PROFIT" --top "$TOP")
   if (( FRESH )); then
     args+=(--refresh)
     FRESH=0   # 同一次运行只刷第一段，后续段复用缓存
