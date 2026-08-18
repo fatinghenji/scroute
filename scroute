@@ -19,6 +19,38 @@
 SELF="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")"
 SCRIPT="$(dirname "$SELF")/plan_route.py"
 SCTT="$(dirname "$SELF")/sctt_routes.py"
+
+usage() {
+  cat <<'EOF'
+scroute — 星际公民货运路线速查（零 LLM token，直接跑 UEX 数据）
+
+用法:
+  scroute                            # 全局 Top 15 路线（默认 Railen + 700W）
+  scroute from "Patch City"          # 去程：从该站出发买什么、卖到哪
+  scroute to "Patch City"            # 返程：半路买什么带回该站卖
+  scroute loop "Patch City"          # 环形：去程+返程一次出
+  scroute dual "Patch City"          # 双源核验：UEX + SC Trade Tools 四段对照
+                                     #   （去程/返程 × UEX/SCTT 各一段，交叉验证）
+  scroute fresh <子命令>             # 强制刷新库存再跑（出发前必用）
+
+覆盖参数（可加在子命令前后）:
+  --ship "Hull B"      换船（默认 Railen；UEX 按船名自动取舱容）
+  --capital 5000000    换本金 aUEC（默认 700W = 7000000）
+  --min-roi 30         最低 ROI%（默认 25）
+  --min-profit 1000000 最低绝对利润 aUEC（默认 0 = 不过滤）
+  --top 20             输出条数（默认 15）
+  --full               满仓押全部本金（默认只押一半，留一半防意外）
+
+其他:
+  scroute raw <参数...>   直接透传底层 plan_route.py
+                          （scroute raw --help 看全部底层参数）
+  scroute dual 需 pycryptodome 包：pip install pycryptodome
+
+数据: UEX API 2.0 众包价，服务端缓存 ~30 分钟；脚本缓存在 /tmp/uex_cache（25 分钟）。
+网络: 直连超时/限速自动回退本机代理（UEX_PROXY/https_proxy 指定，默认 http://127.0.0.1:43010）。
+EOF
+}
+
 SHIP="Railen"
 CAPITAL=7000000
 MIN_ROI=25
@@ -42,9 +74,16 @@ while [[ $# -gt 0 ]]; do
     --min-profit) MIN_PROFIT="$2"; shift 2 ;;
     --top) TOP="$2"; shift 2 ;;
     raw) shift; exec python3 "$SCRIPT" "$@" ;;
+    -h|--help) usage; exit 0 ;;
     *) EXTRA+=("$1"); shift ;;
   esac
 done
+
+# 子命令位置写了 -h（如 `scroute dual -h`）→ 显示帮助而不是当站名
+if [[ -n "$MODE" && ( "$PLACE" == "-h" || "$PLACE" == "--help" ) ]]; then
+  usage
+  exit 0
+fi
 
 run() {
   local -a args=(--ship "$SHIP" --capital "$CAPITAL" --min-roi "$MIN_ROI" --min-profit "$MIN_PROFIT" --top "$TOP")
