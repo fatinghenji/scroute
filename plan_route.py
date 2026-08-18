@@ -11,7 +11,7 @@
   降级: 官方 commodities_routes 全站引导（每商品站 1 请求；行自带 status/scu/roi/distance，
         本地过滤即出候选，免测距免交叉验证；替代旧逐商品 prices 降级——158 商品太慢）
 流程: commodities + terminals + prices_all(带缓存) → 本地算价差候选
-  或 routes 全站引导 → 候选 → 输出 Markdown 表（prices 模式附测距+交叉验证）
+  或 routes 全站引导 → 候选 → 输出对齐表格（prices 模式附测距+交叉验证；终端友好，CJK 按 2 格对齐）
 
 网络: 直连超时/限速自动回退本机代理（scroute_net.py；UEX_PROXY/https_proxy 可指定，
       默认 http://127.0.0.1:43010）。首次代理成功后本次运行直连代理，不再反复白付直连超时。
@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from scroute_net import run_curl
+from tablefmt import render_table
 
 BASE = "https://api.uexcorp.uk/2.0"
 UA = "HermesAgent/1.0 (sc-cargo-workflow)"
@@ -534,8 +535,19 @@ def main():
           f"{'（满仓）' if args.full else '（半仓红线 ' + format(budget/1e4, '.0f') + 'W）'}"
           f" · 买价上限 {max_price:,.0f}/SCU · ROI≥{args.min_roi}%"
           f"{f' · 利润≥{args.min_profit/1e4:.0f}W' if args.min_profit else ''}\n")
-    print("| # | 商品 | 买入站 @价(库存) | 卖出站 @价 | 星系 | 距离 | 装/卸 | ROI | 利润 | 成本 | 时薪 | 验证 |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+
+    def short_term(name, term):
+        """UEX 站名通常带系统后缀（如 "Pyro Gateway (Stanton)"），星系列已显示系统，去掉后缀省宽度。"""
+        sysname = (term or {}).get("star_system_name")
+        suffix = f" ({sysname})"
+        if sysname and name and name.endswith(suffix):
+            return name[: -len(suffix)]
+        return name
+
+    header = ["#", "商品", "买入站 @价(库存)", "卖出站 @价", "星系", "距离", "装/卸",
+              "ROI", "利润", "成本", "时薪", "验证"]
+    aligns = "rllllrlrrrrr"
+    rows = [header]
     for i, c in enumerate(cands, 1):
         b, s = c["buy"], c["sell"]
         v = verified.get((norm(c["commodity"]), b.get("id_terminal"), s.get("id_terminal")))
@@ -545,14 +557,18 @@ def main():
         flag = "⚠️" if c["illegal"] else ""
         rem = s.get("_demand_remaining")
         remtxt = f"(需剩{rem:,.0f})" if rem is not None else ""
-        route = sys_of(b)
-        if sys_of(b) != sys_of(s):
-            route += f"→{sys_of(s)}⚠️跨星系"
-        print(f"| {i} | {c['commodity']}{flag} | {b['terminal_name']} @{b['price_buy']:,.0f}({b.get('scu_buy',0):,.0f}) "
-              f"| {s['terminal_name']} @{s['price_sell']:,.0f}{remtxt} | {route} | {dist} "
-              f"| {load_mark(b)}/{load_mark(s)} | {c['roi']:.1f}% | {c['profit']/1e4:.1f}W | {c['cost']/1e4:.0f}W | {hourly} | {vtxt} |")
+        bsys, ssys = sys_of(b), sys_of(s)
+        route = bsys if bsys == ssys else f"{bsys}→{ssys}⚠"
+        rows.append([f"{i}", f"{c['commodity']}{flag}",
+                     f"{short_term(b.get('terminal_name'), b.get('_term'))} @{b['price_buy']:,.0f}({b.get('scu_buy',0):,.0f})",
+                     f"{short_term(s.get('terminal_name'), s.get('_term'))} @{s['price_sell']:,.0f}{remtxt}",
+                     route, dist,
+                     f"{load_mark(b)}/{load_mark(s)}",
+                     f"{c['roi']:.1f}%", f"{c['profit']/1e4:.1f}W", f"{c['cost']/1e4:.0f}W",
+                     hourly, vtxt])
+    print(render_table(rows, aligns))
     print(f"\n时薪口径: QD {qd_speed/1e6:.0f} Mm/s · 含单腿装卸 + 空驶返程（保守；找到返程货再上浮）")
-    print("需剩 = 卖出端剩余需求（官方口径: scu_sell 预测需求 − scu_sell_stock 站点库存），< 一船舱容的路线已过滤")
+    print("⚠ = 跨星系买卖 · 需剩 = 卖出端剩余需求（官方口径: scu_sell 预测需求 − scu_sell_stock 站点库存），< 一船舱容的路线已过滤")
     print(f"数据: UEX API 2.0 · 缓存 ≤30 分钟 · 出发前请用 --refresh 复核库存 · 总耗时 {time.time()-t_start:.0f}s")
 
 

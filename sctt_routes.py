@@ -19,7 +19,7 @@ UEX_CACHE_DIR 环境变量可改），避免 dual 每次重复拉；--refresh �
   sctt_routes.py [--ship Railen] [--investment 7000000] [--top 10]
                  [--origin "Patch City"] [--refresh]
   sctt_routes.py --circuit 1 [--origin X]   # 展开第 N 条（过滤后序号）为环形路线
-输出: Markdown 表（买站/商品/SCU/金额 → 卖站/金额/利润），供与 UEX plan_route.py 双源比对。
+输出: 对齐表格（买站/商品/SCU/金额 → 卖站/金额/利润），供与 UEX plan_route.py 双源比对。
       --circuit 模式输出该路线闭环各腿（含返程腿，全程不空载）。
 """
 import argparse, base64, hashlib, json, os, sys, tempfile, time
@@ -27,6 +27,8 @@ from pathlib import Path
 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
+
+from tablefmt import render_table
 
 from scroute_net import run_curl
 
@@ -146,30 +148,33 @@ def main():
         o0, d0 = pick.get("origin", {}), pick.get("destination", {})
         print(f"## SCTT 环形路线 #{args.circuit}（{args.ship} · {args.investment:,} aUEC · "
               f"{o0.get('itemName')}：{o0.get('shop')} → {d0.get('shop')}）共 {len(legs)} 腿\n")
-        print("| 腿 | 商品 | 买入站 @单价 | 卖出站 @单价 | 利润 | 耗时 |")
-        print("|---|---|---|---|---|---|")
         tp = tt = 0
+        rows = [["腿", "商品", "买入站 @单价", "卖出站 @单价", "利润", "耗时"]]
         for i, r in enumerate(legs, 1):
             o, d = r.get("origin", {}), r.get("destination", {})
             tp += r.get("profit") or 0
             tt += r.get("timeInSeconds") or 0
-            print(f"| {i} | {o.get('itemName')} | {o.get('shop')} @{unit(o):,.0f} | "
-                  f"{d.get('shop')} @{unit(d):,.0f} | {(r.get('profit') or 0)/1e4:.1f}W | "
-                  f"{(r.get('timeInSeconds') or 0)//60}min |")
-        print(f"\n**全程：利润 {tp/1e4:.1f}W · 耗时 {tt//60}min（闭环不空载）**")
+            rows.append([f"{i}", o.get("itemName") or "?",
+                         f"{o.get('shop') or '?'} @{unit(o):,.0f}",
+                         f"{d.get('shop') or '?'} @{unit(d):,.0f}",
+                         f"{(r.get('profit') or 0)/1e4:.1f}W",
+                         f"{(r.get('timeInSeconds') or 0)//60}min"])
+        print(render_table(rows, "llllrr"))
+        print(f"\n全程：利润 {tp/1e4:.1f}W · 耗时 {tt//60}min（闭环不空载）")
         return
 
     print(f"## SCTT 路线（{args.ship} · {args.investment:,} aUEC"
           f"{' · 起点 ' + args.origin if args.origin else ''}）共 {len(routes)} 条\n")
-    print("| # | 商品 | 买入站 @单价(库存) | 卖出站 @单价(需求) | 利润 | 耗时 |")
-    print("|---|---|---|---|---|---|")
+    rows = [["#", "商品", "买入站 @单价(库存)", "卖出站 @单价(需求)", "利润", "耗时"]]
     for i, r in enumerate(routes[: args.top], 1):
         o, d = r.get("origin", {}), r.get("destination", {})
         roi = (unit(d) / unit(o) - 1) * 100 if unit(o) else 0
-        print(f"| {i} | {o.get('itemName')} | {o.get('shop')} @{unit(o):,.0f}"
-              f"({o.get('quantityInScu', 0):,.0f}) | {d.get('shop')} @{unit(d):,.0f}"
-              f"({d.get('quantityInScu', 0):,.0f}) | {r.get('profit', 0)/1e4:.1f}W"
-              f" (ROI {roi:.0f}%) | {(r.get('timeInSeconds') or 0)//60}min |")
+        rows.append([f"{i}", o.get("itemName") or "?",
+                     f"{o.get('shop') or '?'} @{unit(o):,.0f}({o.get('quantityInScu', 0):,.0f})",
+                     f"{d.get('shop') or '?'} @{unit(d):,.0f}({d.get('quantityInScu', 0):,.0f})",
+                     f"{r.get('profit', 0)/1e4:.1f}W (ROI {roi:.0f}%)",
+                     f"{(r.get('timeInSeconds') or 0)//60}min"])
+    print(render_table(rows, "llllrr"))
 
 
 if __name__ == "__main__":

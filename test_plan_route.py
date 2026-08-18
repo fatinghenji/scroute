@@ -10,11 +10,40 @@ import unittest
 
 import plan_route as pr
 import scroute_net as net
+import tablefmt as tf
 
 try:  # pycryptodome 仅 dual 需要，未装时跳过 sctt 用例
     import sctt_routes
 except ImportError:
     sctt_routes = None
+
+
+class TableFmtTest(unittest.TestCase):
+    """终端对齐表格：CJK 按 2 格，数字列右对齐，每行显示宽度一致。"""
+
+    def test_disp_len_cjk(self):
+        self.assertEqual(tf.disp_len("abc"), 3)
+        self.assertEqual(tf.disp_len("买入站"), 6)  # 每个汉字 2 格
+        self.assertEqual(tf.disp_len("a中文1"), 1 + 4 + 1)
+        self.assertEqual(tf.disp_len("✓46%"), 4)    # ✓ 窄字符
+        self.assertEqual(tf.disp_len("⚠️"), 2)      # ⚠+VS16 按宽字符
+
+    def test_render_aligned(self):
+        rows = [["#", "商品", "利润"], ["1", "中文货", "108.5W"], ["10", "Iron", "5W"]]
+        out = tf.render_table(rows, "rll")
+        lines = out.splitlines()
+        # 首行表头、次行分隔线、末行收尾分隔线，所有行显示宽度一致
+        self.assertEqual(len(lines), 5)
+        widths = {tf.disp_len(l) for l in lines}
+        self.assertEqual(len(widths), 1)
+        # 表头分隔线存在
+        self.assertIn("+", lines[1])
+
+    def test_clip_ellipsis(self):
+        self.assertEqual(tf.clip("abcde", 3), "ab…")
+        self.assertEqual(tf.clip("abcd", 4), "abcd")
+        self.assertEqual(tf.clip("中文", 3), "中…")  # 2+1=3 格
+
 
 
 class NormTest(unittest.TestCase):
