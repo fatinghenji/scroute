@@ -88,6 +88,7 @@ scroute dual "Patch City"
 --ship "Hull B" / --scu 640        船名（模糊匹配自动取舱容）或直接给舱容 SCU 数
 --capital 7000000 [--full]         本金；默认只用一半，--full 全押
 --min-roi 30                       最低 ROI %
+--min-profit 500000                 只保留单趟绝对利润 ≥ 50 万 aUEC 的路线（默认 0 = 不过滤）
 --origin-system Pyro               只在 Pyro 星系出发
 --dest-system Stanton              只卖到 Stanton 星系
 --space-only                       只看空间站（排除要手动搬箱的地面哨站）
