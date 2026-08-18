@@ -75,10 +75,13 @@ UEX 和 SC Trade Tools 两家数据源互相对照，防止被单一来源的过
 
 ```bash
 pip install pycryptodome        # 仅 dual 需要，多装这一个包
-scroute dual "Patch City"
+scroute dual "Patch City"       # 双源核验：去程/返程 × UEX/SCTT 四段对照
+scroute dual                    # 不指定站 = 全局对照（Top 15 × 2 源）
 ```
 
-双源按同一本金口径对比（默认半仓，`--full` 时两边都全押）；SCTT 结果同样缓存 25 分钟，`fresh` 会一并刷新。
+覆盖参数（`--ship`/`--capital`/`--top` 等）可以放在子命令前、后或中间，顺序随意：`scroute dual --capital 9000000 --space-only` 就是「900 万本金 + 仅空间站」的全局双源对照。
+
+双源按同一本金口径对比（默认半仓，`--full` 时两边都全押）；SCTT 结果同样缓存 25 分钟，`fresh`/`--refresh` 会一并刷新。
 
 站点改版可能导致对照失效，修复方法写在 `sctt_routes.py` 开头注释里。
 

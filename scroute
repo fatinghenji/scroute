@@ -31,7 +31,8 @@ scroute — 星际公民货运路线速查（零 LLM token，直接跑 UEX 数�
   scroute loop "Patch City"          # 环形：去程+返程一次出
   scroute dual "Patch City"          # 双源核验：UEX + SC Trade Tools 四段对照
                                      #   （去程/返程 × UEX/SCTT 各一段，交叉验证）
-  scroute fresh <子命令>             # 强制刷新库存再跑（出发前必用）
+  scroute dual                       # 双源核验：不指定站 = 全局对照（Top 15）
+  scroute fresh <子命令>             # 强制刷新库存再跑（出发前必用；--refresh 同义）
 
 覆盖参数（可加在子命令前后）:
   --ship "Hull B"      换船（默认 Railen；UEX 按船名自动取舱容）
@@ -62,12 +63,26 @@ PLACE=""
 EXTRA=()
 
 while [[ $# -gt 0 ]]; do
+  # 子命令已设但站名未取到：下一个非选项裸词就是站名
+  # （支持 `dual --capital 9000000` 无站名全局、`from --space-only Baijini` 选项夹中间等任意顺序）
+  if [[ -n "$MODE" && -z "$PLACE" && "$1" != -* && "$1" != "fresh" && "$1" != "raw" ]]; then
+    PLACE="$1"; shift; continue
+  fi
   case "$1" in
-    from)   MODE="--origin"; PLACE="$2"; shift 2 ;;
-    to)     MODE="--dest";   PLACE="$2"; shift 2 ;;
-    loop)   MODE="loop";     PLACE="$2"; shift 2 ;;
-    dual)   MODE="dual";     PLACE="$2"; shift 2 ;;
+    from|to|loop|dual)
+      case "$1" in
+        from) MODE="--origin" ;;
+        to)   MODE="--dest" ;;
+        *)    MODE="$1" ;;
+      esac
+      # 子命令后紧跟的裸词 = 站名；是选项则跳过（站名槽位留空 = 全局，或由上面的检查补取）
+      if [[ -n "$2" && "$2" != -* && "$2" != "fresh" && "$2" != "raw" ]]; then
+        PLACE="$2"; shift 2
+      else
+        shift 1
+      fi ;;
     fresh)  FRESH=1; shift ;;
+    --refresh) FRESH=1; shift ;;   # 与 fresh 等价（--refresh 不再只透传 UEX 段）
     --ship) SHIP="$2"; shift 2 ;;
     --capital) CAPITAL="$2"; shift 2 ;;
     --min-roi) MIN_ROI="$2"; shift 2 ;;
@@ -79,12 +94,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# 子命令位置写了 -h（如 `scroute dual -h`）→ 显示帮助而不是当站名
-if [[ -n "$MODE" && ( "$PLACE" == "-h" || "$PLACE" == "--help" ) ]]; then
-  usage
-  exit 0
-fi
-
 run() {
   local -a args=(--ship "$SHIP" --capital "$CAPITAL" --min-roi "$MIN_ROI" --min-profit "$MIN_PROFIT" --top "$TOP")
   if (( FRESH )); then
@@ -95,6 +104,10 @@ run() {
 }
 
 if [[ "$MODE" == "dual" ]]; then
+  if ! python3 -c "import Crypto" >/dev/null 2>&1; then
+    echo "dual 需要 pycryptodome 包（SC Trade Tools 双源段用）：pip install pycryptodome" >&2
+    exit 1
+  fi
   # SCTT 与 UEX 本金口径对齐：UEX 默认半仓，SCTT 也按半仓；用户显式 --full 时两边都全押
   INV="$CAPITAL"
   if [[ " ${EXTRA[*]:-} " != *" --full "* ]]; then
@@ -103,29 +116,47 @@ if [[ "$MODE" == "dual" ]]; then
   sctt_args=(--ship "$SHIP" --investment "$INV" --top "$TOP")
   sctt_fresh=0
   (( FRESH )) && sctt_fresh=1   # SCTT 缓存键只含 ship|investment，第一段刷一次即可
-  echo "════════ 去程 UEX：从 $PLACE 出发 ════════"
-  run --origin "$PLACE"
+  if [[ -n "$PLACE" ]]; then
+    leg_out=(--origin "$PLACE"); leg_back=(--dest "$PLACE")
+    tag_out="：从 $PLACE 出发"; tag_back="：回 $PLACE 卖"
+  else
+    leg_out=(); leg_back=()
+    tag_out="（全局 Top $TOP）"; tag_back="（全局 Top $TOP）"
+  fi
+  echo "════════ 去程 UEX${tag_out} ════════"
+  run "${leg_out[@]}"
   echo
   echo "════════ 去程 SCTT（双源比对） ════════"
   if (( sctt_fresh )); then
-    python3 "$SCTT" "${sctt_args[@]}" --refresh --origin "$PLACE"
+    python3 "$SCTT" "${sctt_args[@]}" --refresh "${leg_out[@]}"
   else
-    python3 "$SCTT" "${sctt_args[@]}" --origin "$PLACE"
+    python3 "$SCTT" "${sctt_args[@]}" "${leg_out[@]}"
   fi
   echo
-  echo "════════ 返程 UEX：回 $PLACE 卖 ════════"
-  run --dest "$PLACE"
+  echo "════════ 返程 UEX${tag_back} ════════"
+  run "${leg_back[@]}"
   echo
   echo "════════ 返程 SCTT（双源比对） ════════"
-  python3 "$SCTT" "${sctt_args[@]}" --dest "$PLACE"
+  python3 "$SCTT" "${sctt_args[@]}" "${leg_back[@]}"
 elif [[ "$MODE" == "loop" ]]; then
-  echo "════════ 去程：从 $PLACE 出发 ════════"
-  run --origin "$PLACE"
+  if [[ -n "$PLACE" ]]; then
+    leg_out=(--origin "$PLACE"); leg_back=(--dest "$PLACE")
+    tag_out="：从 $PLACE 出发"; tag_back="：回 $PLACE 卖"
+  else
+    leg_out=(); leg_back=()
+    tag_out="（全局）"; tag_back="（全局）"
+  fi
+  echo "════════ 去程${tag_out} ════════"
+  run "${leg_out[@]}"
   echo
-  echo "════════ 返程：回 $PLACE 卖 ════════"
-  run --dest "$PLACE"
+  echo "════════ 返程${tag_back} ════════"
+  run "${leg_back[@]}"
 elif [[ -n "$MODE" ]]; then
-  run "$MODE" "$PLACE"
+  if [[ -n "$PLACE" ]]; then
+    run "$MODE" "$PLACE"
+  else
+    run
+  fi
 else
   run
 fi
